@@ -35,7 +35,7 @@ export default definePlugin({
   name: "Die For You 歌词",
   version: "1.0.0",
   author: "quaver",
-  description: "在设置页随机展示一句《Die For You》（VALORANT Champions 2022 主题曲）歌词",
+  description: "在设置页随机展示一句《Die For You》（VALORANT Champions 2021 主题曲）歌词",
   kind: "official",
   setup(ctx) {
     ctx.log.info("loaded");
@@ -58,7 +58,7 @@ export default definePlugin({
         const note = document.createElement("p");
         note.className = "muted";
         note.style.cssText = "margin:8px 0 0;font-size:.85em";
-        note.textContent = "Grabbitz — VALORANT Champions 2022 主题曲";
+        note.textContent = "Grabbitz — VALORANT Champions 2021 主题曲";
 
         box.append(quote, btn, note);
         // 本插件无需要清理的资源；有监听/定时器时在这里返回清理函数
