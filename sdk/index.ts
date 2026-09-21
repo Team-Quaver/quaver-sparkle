@@ -6,5 +6,7 @@
 export type * from "./types";
 export * from "./types";
 
+import type { SparklePlugin } from "./types";
+
 /** 插件定义辅助：当前恒等返回，作用是给作者提供类型标注与未来演进锚点 */
 export const definePlugin = (plugin: SparklePlugin): SparklePlugin => plugin;
