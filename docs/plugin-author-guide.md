@@ -46,6 +46,7 @@ export default definePlugin({
 | `registerNowPlayingWidget(w)` | 正在播放页歌词区下方的插件槽内挂部件 | 移除 DOM + 调 render 的清理函数 |
 | `registerSongMenuItem(item|fn)` | 歌曲右键菜单追加项（可传函数按上下文动态生成） | 移除菜单项 |
 | `registerStreamSource(src)` | 备用播放源链的一环：`resolve(song, quality)` 返回 `{url,...}` 即采用，`null` 放行下一环；全链落空走官方 `/stream/resolve` | 移出源链 |
+| `registerKaraokeProvider(p)` | 逐字歌词提供器：`parse(content, translation)` 返回词级时间轴行（`null` = 放弃，宿主回退行级 LRC）；`render(host, lines, ctx)` 接管正在播放页逐字歌词容器（`ctx` 为时间/播放态/翻译开关/seek 的只读闭包） | 移除 provider；正在播放页自动回退行级歌词 |
 
 注意：插件源抛错会被宿主吞掉并 warn（不阻塞播放）；菜单项结构与宿主 MenuItem 同型
 （`label/note/thumb/round/danger/disabled/sub?/run?`）。

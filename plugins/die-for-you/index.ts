@@ -58,7 +58,7 @@ export default definePlugin({
         const note = document.createElement("p");
         note.className = "muted";
         note.style.cssText = "margin:8px 0 0;font-size:.85em";
-        note.textContent = "Grabbitz — VALORANT Champions 2021 主题曲";
+        note.textContent = "Die For You - Grabbitz 《无畏契约》 2021 柏林全球冠军赛主题曲";
 
         box.append(quote, btn, note);
         // 本插件无需要清理的资源；有监听/定时器时在这里返回清理函数

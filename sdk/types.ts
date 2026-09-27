@@ -127,7 +127,59 @@ export interface SparklePlayerFacade {
   on(cb: () => void): () => void;
 }
 
+/** 逐字歌词的一个单词（毫秒时间轴） */
+export interface SparkleKaraokeWord {
+  word: string;
+  startTime: number;
+  endTime: number;
+}
+
+/** 逐字歌词行（与 @applemusic-like-lyrics/core 的 LyricLine 结构兼容） */
+export interface SparkleKaraokeLine {
+  words: SparkleKaraokeWord[];
+  /** 行起始时间（毫秒） */
+  startTime: number;
+  /** 行结束时间（毫秒） */
+  endTime: number;
+  /** 翻译歌词（宿主「翻译」开关关闭时由渲染方自行剔除） */
+  translatedLyric?: string;
+  /** 背景人声行 */
+  isBG?: boolean;
+  /** 对唱行（靠右对齐） */
+  isDuet?: boolean;
+}
+
+/** 渲染期间宿主提供的实时状态只读视图（闭包取值，读到的永远是当前态） */
+export interface SparkleKaraokeRenderCtx {
+  /** 当前播放位置（毫秒，已含宿主的时间补偿） */
+  time(): number;
+  paused(): boolean;
+  /** 正在播放页是否展开；收起时应冻结渲染循环省资源 */
+  expanded(): boolean;
+  showTrans(): boolean;
+  /** 跳转到指定位置（毫秒） */
+  seek(ms: number): void;
+  /** 订阅宿主 notify（约 4Hz + 播放态/展开收起等状态变化即发）；返回退订函数。
+   *  渲染循环据此在页面重新展开时唤醒自己（收起时自停的 rAF 没有人会替你重启）。 */
+  onNotify(cb: () => void): () => void;
+}
+
+/**
+ * 逐字歌词提供器：解析（player 拉到原始歌词后先问 provider）+ 渲染（正在播放页
+ * 的逐字歌词容器整体交给 provider）。停用插件时宿主移除 provider，自动回退行级歌词。
+ */
+export interface SparkleKaraokeProvider {
+  /** 解析逐字歌词；返回 null（或空行表）= 放弃，宿主回退普通 LRC 行级歌词 */
+  parse(content: string, translation: string): SparkleKaraokeLine[] | null;
+  /** 接管逐字歌词容器（容器尺寸随宿主布局变化）；返回的函数在换曲/停用时调用 */
+  render(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: SparkleKaraokeRenderCtx): (() => void) | void;
+  /** 可选的总开关（如插件设置里的「逐字歌词」开关）：false 时宿主回退行级歌词；
+   *  宿主在每次 notify 时重读，切换即时生效（最迟下一个播放事件/4Hz）。 */
+  enabled?(): boolean;
+}
+
 // —— 上下文 ——
+
 
 export interface SparkleStorage {
   get(k: string): string | null;
@@ -155,6 +207,8 @@ export interface SparkleContext {
   registerSongMenuItem(item: SparkleMenuItem | ((ctx: SparkleSongMenuCtx) => SparkleMenuItem)): void;
   /** 注册备用播放源（源链按注册顺序，先注册先试） */
   registerStreamSource(source: SparkleStreamSource): void;
+  /** 注册逐字歌词提供器（先注册先得；停用即回退行级歌词） */
+  registerKaraokeProvider(provider: SparkleKaraokeProvider): void;
   /** 插件专属持久化（localStorage 命名空间） */
   storage: SparkleStorage;
   toast(msg: string, kind?: "ok" | "err"): void;
