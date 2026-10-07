@@ -28,9 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm 版本以本仓库 package.json 的 packageManager 字段为准（action-setup 不给
+      # version 输入时会自动读它；两边都写会 ERR_PNPM_BAD_PM_VERSION）
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
