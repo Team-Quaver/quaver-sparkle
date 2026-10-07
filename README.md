@@ -5,10 +5,13 @@ Quaver Music 插件系统 **Sparkle** 的 SDK 与官方插件仓库。本仓库�
 由 ui 的 Vite 经 `@quaver/sparkle` alias 源码级打进 `ui/dist`，本包不单独构建。
 
 ```
-sdk/      类型契约（sdk/types.ts）+ definePlugin 辅助（sdk/index.ts）
-plugins/  官方插件（随宿主静态打包，如 plugins/die-for-you）
-market/   Marketplace 索引格式约定与默认索引 URL 常量
-docs/     插件作者指南 / Marketplace 与安全模型
+sdk/          类型契约（sdk/types.ts）+ definePlugin 辅助（sdk/index.ts）
+plugins/      官方插件（随宿主静态打包，如 plugins/die-for-you）
+market/       Marketplace 索引格式约定与默认索引 URL 常量
+marketplace/  官方 Marketplace 收录插件的源码真相（CI 构建发布，见 marketplace/README.md）
+scripts/      marketplace 构建脚本（build-marketplace.mjs）
+docs/         插件作者指南 / Marketplace 与安全模型
+.github/      Marketplace 构建 CI（插件打包 → 索引 JSON 发布到 quaver-doc 站点）
 ```
 
 ## 快速上手（插件作者）

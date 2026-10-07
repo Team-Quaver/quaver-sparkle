@@ -4,5 +4,12 @@
   "description": "Quaver Music 插件系统（Sparkle）SDK：类型契约、definePlugin 辅助、官方插件与文档",
   "type": "module",
   "private": true,
-  "main": "sdk/index.ts"
+  "main": "sdk/index.ts",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build:marketplace": "node scripts/build-marketplace.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
 }
