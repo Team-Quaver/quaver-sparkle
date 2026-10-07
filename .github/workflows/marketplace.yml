@@ -1,0 +1,68 @@
+# quaver-sparkle — Marketplace 构建 CI
+#
+# marketplace/ 下每个插件目录（plugin.json + index.ts）打成单文件 ESM，汇总出索引
+# marketplace.json，然后把 dist/site/ 树同步到 quaver-doc 仓库（Team-Quaver/quaver-website，
+# 即 quaver.0w0.red 静态站点）：
+#
+#   public/marketplace.json          ← 索引（应用固定拉 https://quaver.0w0.red/marketplace.json）
+#   public/sparkle/plugins/<id>.js   ← 各插件安装包（索引 download 字段指向这里）
+#
+# 推送依赖仓库 secret WEBSITE_TOKEN：对 quaver-website 有 contents:write 权限的 PAT。
+name: marketplace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "marketplace/**"
+      - "scripts/build-marketplace.mjs"
+      - ".github/workflows/marketplace.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build marketplace
+        run: node scripts/build-marketplace.mjs
+
+      - name: Checkout quaver-website (quaver-doc)
+        uses: actions/checkout@v4
+        with:
+          repository: Team-Quaver/quaver-website
+          ref: main
+          token: ${{ secrets.WEBSITE_TOKEN }}
+          path: website
+
+      - name: Publish index + plugins to quaver-website
+        run: |
+          mkdir -p website/public/sparkle/plugins
+          cp -f dist/site/marketplace.json website/public/marketplace.json
+          cp -f dist/site/sparkle/plugins/*.js website/public/sparkle/plugins/
+          cd website
+          git config user.name "quaver-sparkle-ci"
+          git config user.email "quaver-sparkle-ci@users.noreply.github.com"
+          git add public/marketplace.json public/sparkle/plugins
+          if git diff --cached --quiet; then
+            echo "No changes to publish"
+          else
+            git commit -m "Marketplace: sync from quaver-sparkle@${GITHUB_SHA}"
+            git push
+          fi
