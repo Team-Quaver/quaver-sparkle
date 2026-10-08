@@ -60,11 +60,82 @@ export interface SparkleSettingsSection {
   render(box: HTMLElement): (() => void) | void;
 }
 
+/** 主题自带的一套高亮色（tint）方案，见 SparkleThemeTint。 */
+export interface SparkleTintPreset {
+  id: string;
+  label: string;
+  /** 颜色字面量：`#rgb` / `#rrggbb`。宿主会解析校验，非法项忽略并 warn。 */
+  color: string;
+}
+
+/**
+ * 主题对「高亮颜色（tint）」的态度。
+ *
+ * **不声明**（`theme.tint` 缺省）= 主题自带强调色、自己接管高亮色。宿主会**让位**：不再往
+ * `:root` 写 `--cvg-accent` / `--cvg-glow` / `--cvg-bar-*`（那几个是内联样式，会压过主题
+ * 的 `html[data-sparkle-theme=…]` 规则），同时把设置页的「高亮颜色」整组禁用并注明由谁接管。
+ * 主题只要覆盖 `--acc` / `--cyan`，让位后的高亮色就自动跟着主题走 —— 这是最省事的写法。
+ *
+ * 声明了 = 主题把高亮色让给宿主，用户可在设置页继续调：
+ *   · `mode: "host"`    完全交给宿主的 tint 系统（固定青色 / 跟随封面 / 自定义色三档）；
+ *   · `mode: "presets"` 主题自带几套方案，用户在这些方案里挑（`presets[0]` 是默认）。
+ * 两种模式下主题都**不应**再写 `--cvg-*` —— 那是宿主的地盘，写了也会被内联样式压掉。
+ */
+export interface SparkleThemeTint {
+  mode: "host" | "presets";
+  /** `mode: "presets"` 时用。为空 / 全部非法色时，宿主降级按 "host" 处理（总比整组不可用强）。 */
+  presets?: SparkleTintPreset[];
+}
+
+/**
+ * 主题对「默认主题的背景」的态度（设置→外观→背景：关闭背景 / 专辑封面 / 自定义图片 + 模糊强度）。
+ *
+ * **不声明**（`theme.background` 缺省）= 主题自带视觉，自己接管背景。宿主**让位**：那一层
+ * 环境色（当前曲封面 / 自定义图）整块不画 —— 否则用户的自定义壁纸会从主题的底色底下透出来，
+ * 两边打架。同时把设置页的「背景」整组禁用并注明由谁接管。
+ * 主题想自带背景就在自己的 `css` 里画（覆盖 `--bg`、或用伪元素铺整窗），那是你的地盘。
+ *
+ * 声明了 = 主题把背景让给宿主：用户的三档与模糊强度照常生效（`--ambient-*` 归宿主写）。
+ * 主题**不应**再自己铺整窗背景 —— 那会与用户在设置里选的东西打架。
+ */
+export interface SparkleThemeBackground {
+  mode: "host";
+}
+
+/**
+ * 主题对「浮层菜单的外观」（设置→外观→菜单毛玻璃）的态度。
+ *
+ * 菜单玻璃由宿主的一组令牌统一给：`--menu-filter`（模糊）/ `--menu-surface`（底片）/
+ * `--menu-line`（描边）/ `--menu-shadow`（阴影）/ `--menu-edge`（上缘内高光）。
+ * 消费点七处 = `.ctx-menu`（侧栏歌单 / 歌曲右键菜单）、`.pb-qpop`（音质）、`.pb-lpop`
+ * （播放模式）、`.pb-volpop`（音量）、`.np-menu`（正在播放页「更多操作」）、
+ * `.np-qinfo`（音频流信息）、`.tint-pop`（设置页颜色选择器）。
+ *
+ * **不声明**（`theme.menus` 缺省）= 主题自带菜单外观，自己接管。宿主**让位**：不再往
+ * `<html>` 写 `data-menu-glass` 的 on/off，同时把设置页的「菜单毛玻璃」整组禁用并注明
+ * 由谁接管。要美化菜单，直接在自己的 `css` 里覆盖那几个 `--menu-*` 令牌
+ * （`html[data-sparkle-theme="<id>"]` 的特异性高于 `:root`），或按 `.ctx-menu` 这类选择器
+ * 重画形态 —— 这些都是你的地盘。宿主对 `.np`（正在播放页恒为深色玻璃）另有一套同名令牌，
+ * 想连那一页一起改就写 `html[data-sparkle-theme="<id>"] .np { --menu-surface: … }`。
+ *
+ * 声明了 = 主题把菜单外观让给宿主：用户那棵开关照常生效（开 = 玻璃底 + 模糊；
+ * 关 = 实底不模糊）。此时主题**不应**再写 `--menu-*` —— 写了也会被宿主的开关盖掉。
+ */
+export interface SparkleThemeMenus {
+  mode: "host";
+}
+
 /** 自定义主题：css 是一组 CSS 变量覆盖，作用于 html[data-sparkle-theme="<id>"] */
 export interface SparkleTheme {
   id: string;
   name: string;
   css: string;
+  /** 高亮色（tint）归谁管，见 SparkleThemeTint。**缺省 = 主题接管**。 */
+  tint?: SparkleThemeTint;
+  /** 背景归谁管，见 SparkleThemeBackground。**缺省 = 主题接管**。 */
+  background?: SparkleThemeBackground;
+  /** 浮层菜单的外观归谁管，见 SparkleThemeMenus。**缺省 = 主题接管**。 */
+  menus?: SparkleThemeMenus;
 }
 
 // —— 样式层 / 主题包 ——
@@ -287,6 +358,28 @@ export interface SparkleSongMenuCtx {
   index: number;
 }
 
+/**
+ * 侧栏（主菜单栏）歌单右键菜单的上下文：菜单每次打开时按当时那个歌单现算，
+ * 所以运行中切歌单不会残留上一份 ctx。字段是只读快照，改歌单请走 player 门面或自己的数据源。
+ */
+export interface SparklePlaylistMenuCtx {
+  /** 歌单 id（自建/收藏是 disstid·tid；虚拟歌单是它的稳定 id） */
+  id: string;
+  title: string;
+  /** created = 我创建的歌单｜fav = 收藏的歌单｜virtual = 系统虚拟歌单（每日 30 首 / 我喜欢） */
+  kind: "created" | "fav" | "virtual";
+  /** 曲目数（上游没给时为 0） */
+  songnum: number;
+}
+
+/**
+ * 正在播放页「更多操作」（⋮）菜单的上下文。
+ * `song` 为 null = 当前没在播放（宿主此时显示空态，插件项仍会追加）。
+ */
+export interface SparkleNpMenuCtx {
+  song: SparkleSongSnapshot | null;
+}
+
 export interface SparkleStreamResult {
   /** 可直接挂给播放器的 URL（相对 /api/... 或绝对均可） */
   url: string;
@@ -443,6 +536,10 @@ export interface SparkleContext {
   registerNowPlayingView(view: SparkleNpView): void;
   /** 注册歌曲右键菜单项（追加在「更多操作」之前） */
   registerSongMenuItem(item: SparkleMenuItem | ((ctx: SparkleSongMenuCtx) => SparkleMenuItem)): void;
+  /** 注册侧栏（主菜单栏）歌单右键菜单项（追加在内置项之后） */
+  registerPlaylistMenuItem(item: SparkleMenuItem | ((ctx: SparklePlaylistMenuCtx) => SparkleMenuItem)): void;
+  /** 注册正在播放页「更多操作」（⋮）菜单项（追加在内置项之后） */
+  registerNowPlayingMenuItem(item: SparkleMenuItem | ((ctx: SparkleNpMenuCtx) => SparkleMenuItem)): void;
   /** 注册备用播放源（源链按注册顺序，先注册先试） */
   registerStreamSource(source: SparkleStreamSource): void;
   /** 注册逐字歌词提供器（先注册先得；停用即回退行级歌词） */
