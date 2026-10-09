@@ -124,7 +124,9 @@ const CSS = `
 }
 .fs-root, .fs-root *{ -webkit-user-select:none; user-select:none; }
 
-/* 顶部操作条：接管态的出口（收起）+ 更多选项。左对齐。 */
+/* 顶部操作条：接管态的出口「收起」。左对齐（避开 CSD 的窗口按钮）。
+   「更多选项」已移到**底部控制带、音质选择器左边** —— 有些平台的 CSD（客户端装饰，
+   左上角交通灯 / 标题栏按钮）会盖住这里，顶部的这颗有时点不到。 */
 .fs-top{
   flex:0 0 auto; display:flex; align-items:center; gap:6px; min-height:28px;
 }
@@ -155,6 +157,12 @@ const CSS = `
      预期（谁盖谁看运气）。 */
 }
 .fs-covers.fs-quick{ --fs-roll:.26s; --fs-fade:.2s; }
+/* 换槽动画期间把这五张卡（及其封面盒）提升到合成层：transform/opacity 由合成器
+   跑，主线程此刻的其它活（换图解码、其它 DOM 写入）就不会把过渡噎住 —— 这是
+   「点 ±2 连滚两格时动画发顿」里最容易吃到的一处。动画一结束 class 一撤即回收，
+   不常驻（五张带图卡片常驻 will-change 太吃显存）。 */
+.fs-covers.fs-anim-next .fs-card, .fs-covers.fs-anim-prev .fs-card,
+.fs-covers.fs-anim-next .fs-card .fs-art, .fs-covers.fs-anim-prev .fs-card .fs-art{ will-change:transform, opacity, filter; }
 .fs-card{
   position:absolute; left:50%; top:50%; border:0; padding:0; background:none; color:inherit;
   font:inherit; cursor:pointer;
@@ -307,42 +315,52 @@ const CSS = `
 .fs-love.on{ color:#ff5c72; }
 .fs-love svg{ width:15px; height:15px; }
 
-/* —— 歌词（只有单行版式）——
-   只显示当前这一句（+ 翻译），但**高度要预定**：不预定的话，翻译出现/消失、
-   长句折到第二行都会让整块变高 → 上面的封面跟着上下跳，观感就是「歌词挤着封面
-   一起挤」。min-height 覆盖「一句原文 + 一句翻译」，并留出与歌名、与控制带的
-   呼吸距离（stage 的 gap + 这里的 margin-top），让这句话落在封面下方、控制带上
-   方的独立区间里。 */
+/* —— 歌词：单行 / 五行 两种版式（设置里「歌词行数」切换，默认单行）——
+   mode-one：只显示当前这一句（+ 翻译）。高度预留一个区间，避免翻译出现/长句
+     折行把上面的封面顶着上下跳。过长的一句**自动缩字号**（JS 写 --fs-fit）塞进
+     预留区，而不是被 overflow:hidden 从上下两头裁掉 —— 之前居中的内容一溢出，
+     开头与结尾同时看不见，就是「单行歌词被裁断」。
+   mode-five：整段歌词排成可滚列，窗口固定五行高，当前句居中高亮；滚轮 / 触控板
+     翻阅，停手 3s 自动回到跟随（见 JS 的 browsing / BROWSE_MS）。 */
 .fs-lyrics{
-  flex:0 1 auto; width:min(720px,92%);
-  min-height:4.3em; max-height:8.6em; overflow:hidden;
-  margin-top:6px;
-  display:flex; align-items:center; justify-content:center;
-  text-align:center; padding:0 8px;
+  position:relative; flex:0 1 auto; width:min(720px,92%);
+  margin-top:6px; padding:0 8px; text-align:center;
   font-size:calc(clamp(17px,2.1vw,26px) * var(--fs-ly-scale,1));
   font-family:var(--font-lyric,inherit);
+  overflow:hidden;
 }
+/* 单行版式靠给这一层写 translateY 做垂直居中：只在单行下提升图层，五行用原生滚动不常驻 will-change。 */
+.fs-lyrics.mode-one .fs-ly-roll{ will-change:transform; }
+.fs-lyrics.mode-one{ min-height:4.3em; max-height:8.6em; }
+.fs-lyrics.mode-five{
+  height:9em; overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:none; scroll-behavior:smooth;
+}
+.fs-lyrics.mode-five::-webkit-scrollbar{ width:0; height:0; }
 .fs-ll{
   padding:.1em 4px; cursor:pointer; color:#fff; max-width:100%;
-  font-size:1em; font-weight:700; line-height:1.4;
+  font-size:calc(1em * var(--fs-fit,1)); font-weight:700; line-height:1.4;
   text-shadow:0 2px 22px #00000073;
   transition:opacity .26s ease, transform .26s ease;
 }
+.fs-lyrics.mode-five .fs-ll{ opacity:.4; padding:.2em 4px; }
+.fs-lyrics.mode-five .fs-ll.cur{ opacity:1; font-weight:800; }
 .fs-ll .t2{
   display:block; font-size:.56em; font-weight:400; opacity:.82; margin-top:.28em;
   text-shadow:0 1px 12px #00000059;
 }
 .fs-lyrics.no-trans .fs-ll .t2{ display:none; }
-/* —— 逐字单行（宿主有逐字提供器 + 用户在设置里没关时接管）——
+/* —— 逐字（宿主有逐字提供器 + 用户在设置里没关时接管）——
    复用宿主已激活的提供器（AMLL）解析好的词级行，本插件只负责「当前这一句」的逐词染色。
    染色做法：每个词底下垫一层同字文本的伪元素，用 clip-path 按 --p 从左往右揭开 ——
    只写一个 CSS 变量就是一个词的进度，比逐词换 color 少一半重绘，也不用量任何坐标。
    基色取 65% 白（暗底上半透明白低于 .5 会看不清），已唱部分走高亮（主色 + 白，别拿
-   封面原色当字色，浅色封面上会糊）。 */
+   封面原色当字色，浅色封面上会糊）。white-space 用 pre-wrap：长句仍能折行，
+   不会横向溢出被裁（pre 会禁止换行）。 */
 .fs-ll.kara{ font-weight:800; }
-.fs-ll .kw{ position:relative; white-space:pre; color:#ffffffa6; }
+.fs-ll .kw{ position:relative; white-space:pre-wrap; color:#ffffffa6; }
 .fs-ll .kw::after{
-  content:attr(data-t); position:absolute; left:0; top:0; white-space:pre;
+  content:attr(data-t); position:absolute; left:0; top:0; white-space:pre-wrap;
   color:color-mix(in srgb, var(--fs-acc) 45%, #fff);
   clip-path:inset(0 calc((1 - var(--p,0)) * 100%) 0 0);
 }
@@ -447,17 +465,24 @@ const CSS = `
   transition:background .14s ease, border-color .14s ease;
 }
 .fs-qbtn:hover,.fs-qbtn.open{ background:#ffffff24; border-color:#ffffff4d; }
-/* 弹出层（音质 / 更多选项共用一套玻璃语言；top 或 bottom 由各自的 wrap 决定） */
+/* 弹出层（音质 / 更多选项共用一套玻璃语言；一律从底部控制带**朝上**开：
+   right:0 + bottom:calc(100% + 8px)，所以动画原点取右下角）。
+   开合走「透明度 + 轻微上移 + 微缩」过渡，而不是 display:none/flex 硬切 —— 后者没有动画，
+   一开一关就是啪地闪现。收起态用 visibility 而不是 display：visibility 可过渡（收起时它
+   会等到末帧才翻成 hidden），且 hidden 态不进 a11y 树、不接指针（display:none 则无法过渡）。 */
 .fs-pop{
   position:absolute; min-width:186px; padding:6px;
   border-radius:12px; background:#10131cd9; border:1px solid #ffffff1f; box-shadow:0 14px 40px #0007;
   backdrop-filter:blur(24px) saturate(1.5); -webkit-backdrop-filter:blur(24px) saturate(1.5);
-  display:none; flex-direction:column; gap:1px; z-index:6;
+  display:flex; flex-direction:column; gap:1px; z-index:6;
+  transform-origin:bottom right;
+  opacity:0; visibility:hidden; pointer-events:none; transform:translateY(6px) scale(.97);
+  transition:opacity .16s ease, transform .18s cubic-bezier(.22,.61,.36,1), visibility .18s;
 }
-.fs-pop.open{ display:flex; }
+.fs-pop.open{ opacity:1; visibility:visible; pointer-events:auto; transform:none; }
 .fs-qpop{ right:0; bottom:calc(100% + 8px); }
 .fs-mwrap{ position:relative; }
-.fs-mmenu{ left:0; top:calc(100% + 8px); min-width:224px; }
+.fs-mmenu{ right:0; bottom:calc(100% + 8px); min-width:224px; }
 .fs-qi{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   padding:7px 9px; border:0; border-radius:8px; cursor:pointer; font:inherit; font-size:12.5px;
@@ -497,6 +522,7 @@ const CSS = `
   .fs-title.fs-anim-next,.fs-title.fs-anim-prev,
   .fs-artist.fs-anim-next,.fs-artist.fs-anim-prev,
   .fs-album.fs-anim-next,.fs-album.fs-anim-prev{ animation:none; }
+  .fs-pop{ transition:none; }
 }
 `;
 
@@ -554,24 +580,6 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   host.innerHTML = `
     <div class="fs-top">
       <button class="fs-iconbtn" id="fs-collapse" type="button" title="收起正在播放页" aria-label="收起正在播放页">${ICON.collapse}</button>
-      <div class="fs-mwrap">
-        <button class="fs-iconbtn" id="fs-more" type="button" title="更多选项" aria-label="更多选项" aria-haspopup="menu" aria-expanded="false">${ICON.more}</button>
-        <div class="fs-pop fs-mmenu" id="fs-mmenu" role="menu">
-          <div id="fs-mjump"></div>
-          <div class="fs-msep"></div>
-          <label class="fs-mrow" for="fs-mtrans"><span>翻译歌词</span><input type="checkbox" id="fs-mtrans"><span class="fs-sw" aria-hidden="true"></span></label>
-          <div class="fs-mrow">
-            <span>歌词大小</span>
-            <div class="fs-msize">
-              <button type="button" id="fs-ly-dec" aria-label="缩小歌词" title="缩小歌词">−</button>
-              <span class="fs-mval" id="fs-ly-val">100%</span>
-              <button type="button" id="fs-ly-inc" aria-label="放大歌词" title="放大歌词">+</button>
-            </div>
-          </div>
-          <div class="fs-msep"></div>
-          <button class="fs-qi" id="fs-mcollapse" type="button"><span>收起正在播放页</span></button>
-        </div>
-      </div>
     </div>
     <div class="fs-stage">
       <div class="fs-covers" id="fs-covers">${CARD_OFFSETS.map(cardHtml).join("")}</div>
@@ -583,7 +591,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
         <div class="fs-line fs-artist" id="fs-artist"><span></span></div>
         <div class="fs-line fs-album" id="fs-album"><span></span></div>
       </div>
-      <div class="fs-lyrics" id="fs-lyrics"></div>
+      <div class="fs-lyrics mode-one" id="fs-lyrics"><div class="fs-ly-roll" id="fs-ly-roll"></div></div>
     </div>
     <div class="fs-bar">
       <div class="fs-prow">
@@ -603,6 +611,24 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
           <span class="fs-volnum" id="fs-volnum">80%</span>
         </div>
         <div class="fs-ctl-group">
+          <div class="fs-mwrap">
+            <button class="fs-iconbtn" id="fs-more" type="button" title="更多选项" aria-label="更多选项" aria-haspopup="menu" aria-expanded="false">${ICON.more}</button>
+            <div class="fs-pop fs-mmenu" id="fs-mmenu" role="menu">
+              <div id="fs-mjump"></div>
+              <div class="fs-msep"></div>
+              <label class="fs-mrow" for="fs-mtrans"><span>翻译歌词</span><input type="checkbox" id="fs-mtrans"><span class="fs-sw" aria-hidden="true"></span></label>
+              <div class="fs-mrow">
+                <span>歌词大小</span>
+                <div class="fs-msize">
+                  <button type="button" id="fs-ly-dec" aria-label="缩小歌词" title="缩小歌词">−</button>
+                  <span class="fs-mval" id="fs-ly-val">100%</span>
+                  <button type="button" id="fs-ly-inc" aria-label="放大歌词" title="放大歌词">+</button>
+                </div>
+              </div>
+              <div class="fs-msep"></div>
+              <button class="fs-qi" id="fs-mcollapse" type="button"><span>收起正在播放页</span></button>
+            </div>
+          </div>
           <div class="fs-qwrap">
             <button class="fs-qbtn" id="fs-qbtn" type="button" aria-haspopup="menu" aria-expanded="false" title="音质（本会话生效）">音质</button>
             <div class="fs-pop fs-qpop" id="fs-qpop" role="menu" aria-label="音质"></div>
@@ -641,6 +667,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   const titleBox = $("fs-title"), artistBox = $("fs-artist"), albumBox = $("fs-album");
   const loveBtn = $<HTMLButtonElement>("fs-love");
   const lyricsBox = $("fs-lyrics");
+  const lyricsRoll = $("fs-ly-roll");
   const track = $("fs-track"), curT = $("fs-cur"), durT = $("fs-dur");
   const muteBtn = $<HTMLButtonElement>("fs-mute"), volBox = $("fs-vol"), volNum = $("fs-volnum");
   const qBtn = $<HTMLButtonElement>("fs-qbtn"), qPop = $("fs-qpop");
@@ -654,9 +681,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   // —— 设置（宿主 storage）——
   //  flow    = 总开关（enabled() 也读它）
   //  lyscale = 歌词字号倍率（更多选项里调；持久化，属于用户偏好）
-  // 歌词**只有单行版式**（只显示当前播放的那一句 + 其翻译），不做多档切换：
-  // 版式一变就得重建整列歌词 DOM，收益远小于复杂度，而且单行 + 大封面才是
-  // 「一张图配一句话」的完整构图。
+  //  lyrows  = 歌词行数 1 / 5（设置页里调；默认单行）—— 见歌词段的 buildLyrics
   let lastLyricKey = "";
   let lyScale = clampNum(Number(store?.get("lyscale")) || 1, LY_MIN, LY_MAX);
 
@@ -763,6 +788,10 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     { box: artistBox, inner: artistBox.querySelector("span")!, sig: "" },
     { box: albumBox, inner: albumBox.querySelector("span")!, sig: "" },
   ];
+  // 歌词区也要随窗口尺寸重排（单行重算字号、五行重新居中）。relayoutLyrics 在歌词段
+  // 定义，这里先用一个空实现占位 —— measure 会在初次 paint / RO 回调里被调用，那时
+  // 歌词段早已执行完（函数体整体跑完才会触发 RO 回调），不会踩 TDZ。
+  let relayoutLyrics: () => void = () => {};
   const measure = () => {
     for (const m of marquees) {
       if (!m.sig) continue;
@@ -774,9 +803,10 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
         m.box.style.setProperty("--fs-md", `${Math.max(5, Math.round((over + 20) / 26))}s`);
       }
     }
+    relayoutLyrics();
   };
   const ro = new ResizeObserver(measure);
-  ro.observe(titleBox); ro.observe(artistBox); ro.observe(albumBox);
+  ro.observe(titleBox); ro.observe(artistBox); ro.observe(albumBox); ro.observe(lyricsBox);
   const setMarquee = (i: number, text: string) => {
     const m = marquees[i];
     if (text === m.sig) return;
@@ -890,96 +920,162 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     window.addEventListener("pointercancel", onVolUp);
   });
 
-  // —— 歌词：单行 —— 只渲染当前这一句（+ 翻译），不建整首列表（用户看不到、每行都
-  //    占着内存与解析开销）。两种数据源，由 karaokeActive() 每次 notify 现读决定：
-  //      · 逐字：宿主已激活的提供器（AMLL 插件）解析好的词级行 → 逐词染色，一句里
-  //        能看出唱到哪个字；用户在设置里关掉逐字，这个开关立刻变 false。
+  // —— 歌词：单行 / 五行 两种版式 ——
+  //   mode-one （默认）：只渲染当前这一句（+ 翻译）。单行 + 大封面是「一张图配一句话」
+  //     的完整构图；过长的一句由 fitOne() 自动缩字号塞进预留区，**不再被裁断**。
+  //   mode-five：整段歌词排成可滚列，窗口固定五行高，当前句居中高亮；滚轮 / 触控板
+  //     翻阅，停手 3s 自动回到跟随。
+  //   两种数据源由 karaokeActive() 每次 notify 现读决定：
+  //      · 逐字：宿主已激活的提供器（AMLL）解析好的词级行 → 逐词染色，一句里能看出
+  //        唱到哪个字；用户在设置里关掉逐字，这个开关立刻变 false。
   //      · 行级：没有提供器 / 逐字解析失败 / 该曲无逐字 → ctx.lyrics() 整句高亮。
-  //    换句由 rAF 的行号比对触发（见 tick），这里只负责换曲/加载态/模式或翻译切换的重建。
+  //   两源都折进同一个 DispLine（有 words = 逐字），渲染路径共用（renderLine）。
+  //   换句由 rAF 的行号比对触发（见 tick），这里只负责换曲/加载态/版式或翻译切换的重建。
+  interface DispLine { t: number; text: string; trans?: string; words?: { word: string; startTime: number; endTime: number }[]; }
   let lyricLines: SparkleLyricLine[] = [];
+  let karaLines: SparkleKaraokeLine[] = [];
+  let dispLines: DispLine[] = [];
   let lineEls: HTMLElement[] = [];
   let lastIdx = -1;
-  let lastLineSig: string | null = null;
+  let lastLineSig = "";
   let karaOn = false;
-  let karaLines: SparkleKaraokeLine[] = [];
   let karaWords: HTMLElement[] = [];
-  let lastKaraSig: string | null = null;
+  let lyricMode: 1 | 5 = 1;
+  let activeFive = -1;
+  let browsing = false;
+  let browseTimer = 0;
+
+  const LY_BROWSE_MS = 3000;
+  const LY_FIT_MIN = 0.55;
+
+  const transHtml = (l: DispLine) =>
+    l.trans && ctx.showTrans() ? `<span class="t2">${esc(l.trans)}</span>` : "";
+
+  /** 把一条歌词铺进元素；asWords=true 且有词级数据时走逐词 span（返回词元素表）。
+   *  词的文本走 textContent 写（不拼 HTML，免转义），同一份塞进 data-t —— CSS 用
+   *  `::after{content:attr(data-t)}` 叠一层同字文本，靠 clip-path 按 --p 从左揭开。 */
+  const renderLine = (el: HTMLElement, l: DispLine, asWords: boolean): HTMLElement[] => {
+    const useWords = asWords && !!l.words && l.words.length > 0;
+    el.classList.toggle("kara", useWords);
+    if (useWords) {
+      el.innerHTML = l.words!.map(() => `<span class="kw"></span>`).join("") + transHtml(l);
+      const ws = [...el.querySelectorAll<HTMLElement>(".kw")];
+      l.words!.forEach((w, i) => { const e = ws[i]; if (e) { e.textContent = w.word; e.dataset.t = w.word; } });
+      return ws;
+    }
+    el.innerHTML = `<span class="t1">${esc(l.text)}</span>` + transHtml(l);
+    return [];
+  };
+
+  /** 单行版式：内容超出预留区就自动缩字号（写 --fs-fit），把整句塞进去 —— 绝不裁头裁尾。
+   *  之前是居中 + overflow:hidden，内容一溢出就从上下同时裁掉（开头结尾都看不见）。 */
+  const fitOne = (el: HTMLElement) => {
+    el.style.setProperty("--fs-fit", "1");
+    let fit = 1;
+    for (let i = 0; i < 6; i++) {
+      const avail = lyricsBox.clientHeight;
+      const need = lyricsRoll.scrollHeight;
+      if (need <= avail + 1) break;
+      fit = Math.max(LY_FIT_MIN, fit * (avail / need) * 0.97);
+      el.style.setProperty("--fs-fit", fit.toFixed(3));
+    }
+    // 没占满预留区时居中；缩到下限仍溢出则顶部对齐（至少开头不被裁）
+    const rh = lyricsRoll.scrollHeight;
+    lyricsRoll.style.transform = `translateY(${Math.max(0, (lyricsBox.clientHeight - rh) / 2).toFixed(1)}px)`;
+  };
+
+  /** 五行版式：把某句滚到窗口正中（原生滚动，带 CSS 的平滑） */
+  const centerLine = (el: HTMLElement) => {
+    const max = Math.max(0, lyricsBox.scrollHeight - lyricsBox.clientHeight);
+    const want = el.offsetTop - (lyricsBox.clientHeight - el.offsetHeight) / 2;
+    lyricsBox.scrollTop = clampNum(want, 0, max);
+  };
 
   const buildLyrics = (cur: SparkleSongSnapshot | null) => {
     const st = ctx.lyricState();
     const kara = ctx.karaokeActive();
-    // 模式也进签名：逐字开关一改就整体重建（否则容器里还挂着上一种模式的 DOM）
-    const key = `${cur?.mid ?? ""}|${st}|${ctx.showTrans() ? 1 : 0}|${kara ? "k" : "l"}`;
+    const mode: 1 | 5 = store?.get("lyrows") === "5" ? 5 : 1;
+    // 曲/状态/翻译/逐字/行数 都进签名：任一改动就整体重建（否则容器里还挂着上一种版式的 DOM）
+    const key = `${cur?.mid ?? ""}|${st}|${ctx.showTrans() ? 1 : 0}|${kara ? "k" : "l"}|${mode}`;
     if (key === lastLyricKey) return;
     lastLyricKey = key;
-    lastIdx = -1;
-    lastLineSig = null;
-    lastKaraSig = null;
+    lyricMode = mode;
     karaOn = kara;
-    karaLines = kara ? ctx.karaoke() : [];
-    lyricLines = kara ? [] : ctx.lyrics();
+    lastIdx = -1;
+    activeFive = -1;
+    lastLineSig = "";
     lineEls = [];
     karaWords = [];
-    if (!cur) { lyricsBox.innerHTML = `<div class="fs-ly-empty">未在播放</div>`; return; }
-    const count = karaOn ? karaLines.length : lyricLines.length;
+    browsing = false;
+    window.clearTimeout(browseTimer);
+    lyricsBox.classList.toggle("mode-one", mode === 1);
+    lyricsBox.classList.toggle("mode-five", mode === 5);
+    lyricsBox.scrollTop = 0;
+    lyricsRoll.style.transform = "";
+    lyricsRoll.innerHTML = "";
+    karaLines = kara ? ctx.karaoke() : [];
+    lyricLines = kara ? [] : ctx.lyrics();
+    if (!cur) { lyricsRoll.innerHTML = `<div class="fs-ly-empty">未在播放</div>`; return; }
+    const count = kara ? karaLines.length : lyricLines.length;
     if (st === "loading" || (st === "idle" && !count)) {
-      lyricsBox.innerHTML = `<div class="fs-ly-empty">歌词加载中…</div>`;
+      lyricsRoll.innerHTML = `<div class="fs-ly-empty">歌词加载中…</div>`;
       return;
     }
-    if (!count) { lyricsBox.innerHTML = `<div class="fs-ly-empty">暂无歌词</div>`; return; }
-    // 先留空：rAF 首次 tick 会把当前句填进来
-    lyricsBox.innerHTML = "";
+    if (!count) { lyricsRoll.innerHTML = `<div class="fs-ly-empty">暂无歌词</div>`; return; }
+    // 折成同一种模型（时间统一秒；逐字额外保留毫秒词表）
+    dispLines = kara
+      ? karaLines.map((l) => ({ t: l.startTime / 1000, text: l.words.map((w) => w.word).join(""), trans: l.translatedLyric, words: l.words }))
+      : lyricLines.map((l) => ({ t: l.t, text: l.text, trans: l.trans }));
+    if (mode === 5) {
+      // 整列一次建好（几十到几百个纯文本 div，开销可控）；rAF 只切 .cur 与逐字
+      lyricsRoll.innerHTML = dispLines.map((l, i) =>
+        `<div class="fs-ll" data-i="${i}" title="点击跳到这一句"><span class="t1">${esc(l.text)}</span>${transHtml(l)}</div>`
+      ).join("");
+      lineEls = [...lyricsRoll.querySelectorAll<HTMLElement>(".fs-ll")];
+      for (const el of lineEls) {
+        el.onclick = () => { browsing = false; window.clearTimeout(browseTimer); ctx.seek(dispLines[Number(el.dataset.i)].t); };
+      }
+    }
+    // 单行版式先留空：rAF 首次 tick 会把当前句填进来
   };
 
-  /** 把第 idx 句填进单行歌词容器（idx < 0 = 清空）；karaoke 走逐词版 */
+  /** 单行：填当前句（idx < 0 = 清空） */
   const paintCurrentLine = (idx: number) => {
-    const l = idx >= 0 ? lyricLines[idx] : undefined;
-    const sig = l ? `${l.t}|${l.text}|${l.trans ?? ""}` : "empty";
+    const l = idx >= 0 ? dispLines[idx] : undefined;
+    const sig = l ? `${l.t}|${l.text}|${(l.words ?? []).map((w) => w.word).join("\u0001")}|${l.trans ?? ""}` : "empty";
     if (sig === lastLineSig) return;
     lastLineSig = sig;
-    if (!l) { lyricsBox.innerHTML = lyricLines.length ? "" : `<div class="fs-ly-empty">暂无歌词</div>`; lineEls = []; return; }
-    lyricsBox.innerHTML = `<div class="fs-ll cur" title="点击跳到这一句"><span class="t1">${esc(l.text)}</span>${
-      l.trans && ctx.showTrans() ? `<span class="t2">${esc(l.trans)}</span>` : ""
-    }</div>`;
-    lineEls = [...lyricsBox.querySelectorAll<HTMLElement>(".fs-ll")];
-    if (lineEls[0]) lineEls[0].onclick = () => { ctx.seek(l.t); };
+    karaWords = [];
+    if (!l) { lyricsRoll.innerHTML = dispLines.length ? "" : `<div class="fs-ly-empty">暂无歌词</div>`; return; }
+    lyricsRoll.innerHTML = "";
+    const el = document.createElement("div");
+    el.className = "fs-ll cur";
+    el.title = "点击跳到这一句";
+    karaWords = renderLine(el, l, karaOn);
+    el.onclick = () => ctx.seek(l.t);
+    lyricsRoll.append(el);
+    fitOne(el);
   };
 
-  /**
-   * 逐字：把第 idx 行铺成「每个词一个 span」。词的文本走 textContent 写（不拼 HTML，
-   * 免去转义问题），同时把同一份文本塞进 data-t —— CSS 用 `::after{content:attr(data-t)}`
-   * 叠一层同字文本，靠 clip-path 按 --p 从左揭开，就是逐字染色。
-   */
-  const paintKaraLine = (idx: number) => {
-    const l = idx >= 0 ? karaLines[idx] : undefined;
-    const sig = l ? `${l.startTime}|${l.words.map((w) => w.word).join("\u0001")}|${l.translatedLyric ?? ""}` : "empty";
-    if (sig === lastKaraSig) return;
-    lastKaraSig = sig;
-    if (!l) {
-      lyricsBox.innerHTML = karaLines.length ? "" : `<div class="fs-ly-empty">暂无歌词</div>`;
-      karaWords = [];
-      return;
+  /** 五行：切当前句高亮（逐字只给当前句铺词）+ 跟随居中 */
+  const paintActiveFive = (idx: number) => {
+    if (idx !== activeFive) {
+      if (activeFive >= 0 && lineEls[activeFive] && dispLines[activeFive]) renderLine(lineEls[activeFive], dispLines[activeFive], false);
+      activeFive = idx;
+      for (let i = 0; i < lineEls.length; i++) lineEls[i].classList.toggle("cur", i === idx);
+      const el = idx >= 0 ? lineEls[idx] : undefined;
+      karaWords = el && dispLines[idx] ? renderLine(el, dispLines[idx], karaOn) : [];
     }
-    lyricsBox.innerHTML = `<div class="fs-ll kara" title="点击跳到这一句">${
-      l.words.map(() => `<span class="kw"></span>`).join("")
-    }${l.translatedLyric && ctx.showTrans() ? `<span class="t2">${esc(l.translatedLyric)}</span>` : ""}</div>`;
-    karaWords = [...lyricsBox.querySelectorAll<HTMLElement>(".kw")];
-    l.words.forEach((w, i) => {
-      const el = karaWords[i];
-      if (!el) return;
-      el.textContent = w.word;
-      el.dataset.t = w.word;
-    });
-    const box = lyricsBox.querySelector<HTMLElement>(".fs-ll");
-    if (box) box.onclick = () => ctx.seek(l.startTime / 1000);
+    const el = idx >= 0 ? lineEls[idx] : undefined;
+    if (el && !browsing) centerLine(el);
   };
 
-  /** 逐词进度：--p 是「这个词已经唱了多少」。**只在变化时写**（量化到 2%），
-   *  一个句子里 99% 的词是 0 或 1，稳态几乎零写入。 */
-  const paintKaraWords = (l: SparkleKaraokeLine, ms: number) => {
+  /** 逐词进度：--p 是「这个词已经唱了多少」。只在变化时写（量化到 2%），稳态几乎零写入。 */
+  const paintKaraWords = (l: DispLine, ms: number) => {
+    const ws = l.words;
+    if (!ws) return;
     for (let i = 0; i < karaWords.length; i++) {
-      const w = l.words[i];
-      const el = karaWords[i];
+      const w = ws[i], el = karaWords[i];
       if (!w || !el) continue;
       const span = Math.max(1, w.endTime - w.startTime);
       const p = ms >= w.endTime ? 1 : ms <= w.startTime ? 0 : (ms - w.startTime) / span;
@@ -988,6 +1084,24 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
       el.dataset.p = String(q);
       el.style.setProperty("--p", String(q));
     }
+  };
+
+  /** 五行：滚轮翻阅。native 滚动自己走，这里只管「翻阅中暂停跟随 + 停手回跟随」。 */
+  const onLyricWheel = () => {
+    if (lyricMode !== 5) return;
+    browsing = true;
+    window.clearTimeout(browseTimer);
+    browseTimer = window.setTimeout(() => {
+      browsing = false;
+      if (activeFive >= 0 && lineEls[activeFive]) centerLine(lineEls[activeFive]);
+    }, LY_BROWSE_MS);
+  };
+  lyricsBox.addEventListener("wheel", onLyricWheel, { passive: true });
+
+  // 窗口尺寸变化时重排歌词（单行重算字号、五行重新居中）—— 挂进上面那个 measure 钩子
+  relayoutLyrics = () => {
+    if (lyricMode === 5) { if (activeFive >= 0 && lineEls[activeFive]) centerLine(lineEls[activeFive]); }
+    else { const el = lyricsRoll.querySelector<HTMLElement>(".fs-ll"); if (el) fitOne(el); }
   };
 
   // —— 状态绘制。刻意分两层：
@@ -1048,6 +1162,28 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
    *  否则收尾那一帧会把目标曲直接填进中间槽 —— 看上去就是「没有动画，直接闪」。 */
   let paintShift = 0;
   let animTimer = 0;
+  /** 多格跳转（点 ±2）期间**推迟信息三行**：封面还在连滚，标题要等最后一格落定才换，
+   *  否则标题一开场就显示目标曲（甚至滑入两次），跟封面完全对不上。 */
+  let deferInfo = false;
+  /** 多格跳转落定后要补播的信息动画方向（0 = 没有） */
+  let pendingInfoDir: 1 | -1 | 0 = 0;
+
+  /** 信息三行（歌名/歌手/专辑）的「上滑淡入」。**由信息真的换了触发，与封面动画解耦** ——
+   *  ±1 时在起点跟着封面一起进；±2 时推迟到最后一格落定（见 paintSong / settleSwitch）。 */
+  const infoEls = [titleBox, artistBox, albumBox];
+  let infoTimer = 0;
+  const animateInfo = (dir: 1 | -1) => {
+    const cls = dir > 0 ? "fs-anim-next" : "fs-anim-prev";
+    // 只有「上一轮动画的 class 还挂着」（连环切歌）时才强制 reflow 让它从 0 重播；
+    // 常规单次切歌 class 早已被定时器摘掉，直接 add 就会重播 —— 少一次同步 reflow，
+    // 起动画那一帧就更不容易掉帧。
+    const wasOn = titleBox.classList.contains(cls);
+    for (const el of infoEls) el.classList.remove("fs-anim-next", "fs-anim-prev");
+    if (wasOn) void titleBox.offsetWidth;
+    for (const el of infoEls) el.classList.add(cls);
+    window.clearTimeout(infoTimer);
+    infoTimer = window.setTimeout(() => { for (const el of infoEls) el.classList.remove(cls); }, 420);
+  };
 
   /**
    * 动画收尾 = **整排身份转一格**。这一步漏了，整排在动画结束的瞬间会整体弹回去。
@@ -1062,7 +1198,6 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
    */
   const settleSwitch = (direction: 1 | -1) => {
     covers.classList.remove("fs-anim-next", "fs-anim-prev");
-    for (const el of [titleBox, artistBox, albumBox]) el.classList.remove("fs-anim-next", "fs-anim-prev");
     let hopper: HTMLButtonElement | null = null;
     for (const el of cardEls) {
       el.removeAttribute("data-to");
@@ -1081,19 +1216,27 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     adoptMain();
     sigs.clear(); // 槽位的含义变了：整排重取一次封面
     animating = false;
-    // 槽位落定后再刷数据：动画期间换图会被用户看成「图在动」。
-    // 走 paintMeta（而不只是 paintSong）：缓冲圈/错误条那几层挂在「谁是中间卡」上，
-    // 中间卡刚换了主人，状态也得跟着重新落一遍。
+    // 还欠一格 = 点 ±2 的连滚：走上面那条「先起动画、下帧补图」的接力路径（见下）。
     if (queuedRolls > 0) {
-      // 还欠一格（点 ±2）：这一帧刷 **差一个槽位** 的过渡态 —— 0 号槽此刻物理上
-      // 站着的是「上一首」，直接填目标曲会让它当场换脸（就是「直接闪」的观感）。
+      // 还欠一格（点 ±2）：这一帧的槽位含义先拨到 **差一个槽位** 的过渡态 ——
+      // 0 号槽此刻物理上站着的是「上一首」，直接填目标曲会让它当场换脸（「直接闪」）。
       paintShift = direction;
-      paintMeta();
       queuedRolls--;
+      // **先起第二格过渡**（与第一格首尾相接、同一条曲线，中间不留停顿）。真正的卡顿
+      // 来自这一帧里同步跑整轮 paintMeta（换图/歌词/画质/红心一起上）把过渡噎住，
+      // 所以这里只起动画、别的都往后挪。
       playSwitchAnim(queuedDir, ANIM_QUICK_MS);
+      // 换图推到下一帧：出画那张此刻 opacity:0 看不见，一帧后再换封面，等它淡入时已是新图。
+      const shift = paintShift;
+      requestAnimationFrame(() => { if (host.isConnected && paintShift === shift) paintCards(ctx.current()); });
       return;
     }
+    // 单格动画 / 连滚的最后一格落定：整排摆好，再刷数据。
+    // 走 paintMeta（而非只用 paintCards）：缓冲圈/错误条挂在「谁是中间卡」上，中间卡刚换
+    // 主人，状态要跟着重落；deferInfo 也在此放行 —— 信息三行到这一句才换成目标曲，
+    // 于是标题与封面同步落定（这就是「标题跟着封面」）。
     paintShift = 0;
+    deferInfo = false;
     covers.classList.remove("fs-quick"); // 连滚结束，时长回到常速
     paintMeta();
   };
@@ -1123,13 +1266,13 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     // 收尾后两侧用的两张新封面：趁动画这 440ms 先下下来（见 preloadCover 的注释）
     preloadCover(ctx.songAt(1), 1);
     preloadCover(ctx.songAt(-1), -1);
-    const cls = direction > 0 ? "fs-anim-next" : "fs-anim-prev";
+    // 目标槽位 = 当前槽位 - 方向。**不强制 reflow**：上一轮收尾已把 data-off 拨到与
+    // 上一格 data-to 重合的位置，浏览器此刻的「当前值」就是上一格终点，直接改 data-to
+    // 会从当前值平滑过渡到新目标（两格连成一条曲线）；而 `void offsetWidth` 会在换图
+    // 之后同步冲一次布局，正是接缝那一下「顿」的主要来源。
     covers.classList.remove("fs-anim-next", "fs-anim-prev");
-    void covers.offsetWidth; // 强制 reflow：让浏览器看到 class 真的消失再出现
     for (const el of cardEls) el.dataset.to = String(Number(el.dataset.off) - direction);
-    covers.classList.add(cls);
-    // 信息三行走「上滑淡入」，与封面翻页错开一点（先动封面、再动字）
-    for (const el of [titleBox, artistBox, albumBox]) el.classList.add(cls);
+    covers.classList.add(direction > 0 ? "fs-anim-next" : "fs-anim-prev");
 
     window.clearTimeout(animTimer);
     animTimer = window.setTimeout(() => {
@@ -1138,18 +1281,61 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     }, ms);
   };
 
+  /**
+   * 把封面卡刷成当前槽位对应的曲子。**只干这一件事**（信息三行另有 setMarquee/animateInfo）——
+   * 拆出来是为了让连滚两格的接缝处能只重刷卡面、不连带跑整轮 paintMeta（那才是卡顿的来源），
+   * 也为了接缝那帧能把换图推迟到下一帧而不影响信息/歌词。
+   *
+   * 槽位 → 曲子：常态 0 号槽 = 当前曲；连滚两格的中间态整排偏一格（paintShift），
+   * 此刻 0 号槽物理上站着的是「上一首」，得按偏移取歌，否则收尾会当场换脸。
+   */
+  const paintCards = (cur: SparkleSongSnapshot | null) => {
+    // —— 封面预热（跟随播放顺序）——
+    // 稳态就把 ±1/±2（正在显示的两张侧卡）与 ±3（下一次转格会顶上来的）都先拿下来：
+    // **不等到点下去才请求**。换槽动画只有 440ms，收尾那张是淡入的，浏览器在新图
+    // 解码完成前会继续画旧图 —— 于是淡入过程中先露出上一首的封面（「加载导致难受」）。
+    // 顺序与显示同一来源（ctx.songAt 与宿主共用 stepInOrder，随机播放下也是对的）；
+    // 越界返回 null，preloadCover 自动跳过。URL 与真正显示时一致 ——
+    // 五张卡的封面盒同宽，任何槽位的取图像素都相同，不会出现「小图换大图」。
+    for (const off of [-1, 1, -2, 2, -3, 3]) preloadCover(ctx.songAt(off), off);
+
+    for (const el of cardEls) {
+      const o = Number(el.dataset.off);
+      const img = el.querySelector<HTMLImageElement>("img")!;
+      const ph = el.querySelector<HTMLElement>(".fs-ph")!;
+      const cap = el.querySelector<HTMLElement>(".fs-cap")!;
+      // 无障碍标签也要跟着槽位走（节点身份会转格）
+      const label = o === 0 ? "播放/暂停" : o === -1 ? "上一首" : o === 1 ? "下一首" : o < 0 ? "上上首" : "下下首";
+      if (el.getAttribute("aria-label") !== label) el.setAttribute("aria-label", label);
+      const off = o - paintShift;
+      const s = off === 0 ? cur : ctx.songAt(off);
+      const url = coverOf(s, wantPx(o));
+      const name = s?.name ?? "";
+      const key = url + "|" + name;
+      if (sigs.get(o) === key) continue;
+      sigs.set(o, key);
+      setCover(img, ph, url);
+      if (cap) cap.textContent = name;
+      // 邻曲不存在（队列到头）→ 整张卡淡出并禁用点击，别留一个空壳占槽位
+      el.classList.toggle("empty", !s);
+      el.disabled = !s;
+    }
+  };
+
   const paintSong = (cur: SparkleSongSnapshot | null) => {
     // 方向判定用**旧的**邻居表。不能用 ctx.songAt() 反查：那是以**新**当前曲为原点
     // 算的，而新曲正是旧邻居之一 —— 换过去之后它变成 current，原来的「下一首」
     // 位置改成了旧 current，反查必然落空（上一版点侧封面因此从不触发动画）。
+    let switchDir: 1 | -1 | 0 = 0;
     if (cur && !animating && lastMid && cur.mid !== lastMid) {
-      if (cur.mid === lastNextMid) playSwitchAnim(1);
-      else if (cur.mid === lastPrevMid) playSwitchAnim(-1);
+      if (cur.mid === lastNextMid) { deferInfo = false; switchDir = 1; playSwitchAnim(1); }
+      else if (cur.mid === lastPrevMid) { deferInfo = false; switchDir = -1; playSwitchAnim(-1); }
       // 点 ±2（上上/下下曲）一次跳两首：新当前曲是「旧 +2 / -2 邻居」。
       // 一格动画对不上两首的位移（收尾会把整排摆错一格），所以连滚两格 ——
       // 第一格收尾刷「差一格」的中间态，第二格才落到目标（见 settleSwitch / paintShift）。
-      else if (cur.mid === lastNextMid2) { queuedRolls = 1; queuedDir = 1; playSwitchAnim(1, ANIM_QUICK_MS); }
-      else if (cur.mid === lastPrevMid2) { queuedRolls = 1; queuedDir = -1; playSwitchAnim(-1, ANIM_QUICK_MS); }
+      // deferInfo：这两格期间**不换标题**，等最后一格落定再换，让标题跟着封面走。
+      else if (cur.mid === lastNextMid2) { deferInfo = true; pendingInfoDir = 1; queuedRolls = 1; queuedDir = 1; playSwitchAnim(1, ANIM_QUICK_MS); }
+      else if (cur.mid === lastPrevMid2) { deferInfo = true; pendingInfoDir = -1; queuedRolls = 1; queuedDir = -1; playSwitchAnim(-1, ANIM_QUICK_MS); }
     }
     if (cur) {
       lastMid = cur.mid;
@@ -1163,44 +1349,16 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 
     // 动画期间不刷卡面数据（换图会毁掉「整排翻一格」的连续感）；
     // settleSwitch 会再调一次本函数，那时 animating 已复位，数据补齐。
-    if (!animating) {
-      // —— 封面预热（跟随播放顺序）——
-      // 稳态就把 ±1/±2（正在显示的两张侧卡）与 ±3（下一次转格会顶上来的）都先拿下来：
-      // **不等到点下去才请求**。换槽动画只有 440ms，收尾那张是淡入的，浏览器在新图
-      // 解码完成前会继续画旧图 —— 于是淡入过程中先露出上一首的封面（「加载导致难受」）。
-      // 顺序与显示同一来源（ctx.songAt 与宿主共用 stepInOrder，随机播放下也是对的）；
-      // 越界返回 null，preloadCover 自动跳过。URL 与真正显示时一致 ——
-      // 五张卡的封面盒同宽，任何槽位的取图像素都相同，不会出现「小图换大图」。
-      for (const off of [-1, 1, -2, 2, -3, 3]) preloadCover(ctx.songAt(off), off);
+    if (!animating) paintCards(cur);
 
-      for (const el of cardEls) {
-        const o = Number(el.dataset.off);
-        const img = el.querySelector<HTMLImageElement>("img")!;
-        const ph = el.querySelector<HTMLElement>(".fs-ph")!;
-        const cap = el.querySelector<HTMLElement>(".fs-cap")!;
-        // 无障碍标签也要跟着槽位走（节点身份会转格）
-        const label = o === 0 ? "播放/暂停" : o === -1 ? "上一首" : o === 1 ? "下一首" : o < 0 ? "上上首" : "下下首";
-        if (el.getAttribute("aria-label") !== label) el.setAttribute("aria-label", label);
-        // 槽位 → 曲子：常态 0 号槽就是当前曲；连滚两格的中间态整排偏一格（paintShift），
-        // 此刻 0 号槽物理上站着的是「上一首」，得按偏移取歌，否则收尾会当场换脸。
-        const off = o - paintShift;
-        const s = off === 0 ? cur : ctx.songAt(off);
-        const url = coverOf(s, wantPx(o));
-        const name = s?.name ?? "";
-        const key = url + "|" + name;
-        if (sigs.get(o) === key) continue;
-        sigs.set(o, key);
-        setCover(img, ph, url);
-        if (cap) cap.textContent = name;
-        // 邻曲不存在（队列到头）→ 整张卡淡出并禁用点击，别留一个空壳占槽位
-        el.classList.toggle("empty", !s);
-        el.disabled = !s;
-      }
+    // 信息三行：多格跳转（deferInfo）期间不动 —— 标题要跟封面走，等最后一格落定再一起换。
+    if (!deferInfo) {
+      setMarquee(0, cur?.name ?? "未在播放");
+      setMarquee(1, artistsOf(cur) || "未知歌手");
+      setMarquee(2, cur?.album?.name || "");
+      const dir = switchDir || pendingInfoDir;
+      if (dir) { animateInfo(dir); pendingInfoDir = 0; }
     }
-
-    setMarquee(0, cur?.name ?? "未在播放");
-    setMarquee(1, artistsOf(cur) || "未知歌手");
-    setMarquee(2, cur?.album?.name || "");
   };
 
   /** 4Hz 层：曲目元数据 + 歌词 + 收藏 + 翻译 + 画质（这些都不跟手，没必要每帧跑） */
@@ -1310,23 +1468,22 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   const tick = () => {
     raf = 0;
     if (!ctx.expanded() || !host.isConnected) { running = false; return; }
-    // 当前句：逐帧只做「行号比对」，变了才重填 DOM（单行版式没有滚动/高亮切换）。
+    // 当前句：逐帧只做「行号比对」，变了才重填 / 切高亮（五行版式的跟随居中只在换句时做，
+    // 每帧写 scrollTop 会把平滑滚动反复重启，永远滚不到位）。
     // +0.2s 与宿主行级高亮同一处时间补偿。
-    if (karaOn) {
-      // 逐字：行号比对之外还要**每帧**刷词进度（这正是逐字的意义所在）
-      const ms = (ctx.time() + 0.2) * 1000;
+    if (dispLines.length) {
+      const sec = ctx.time() + 0.2;
       let idx = -1;
-      for (let i = 0; i < karaLines.length; i++) { if (karaLines[i].startTime <= ms) idx = i; else break; }
-      if (idx !== lastIdx) { lastIdx = idx; paintKaraLine(idx); }
-      if (idx >= 0) paintKaraWords(karaLines[idx], ms);
-    } else if (lyricLines.length) {
-      const t = ctx.time() + 0.2;
-      let idx = -1;
-      for (let i = 0; i < lyricLines.length; i++) { if (lyricLines[i].t <= t) idx = i; else break; }
-      if (idx !== lastIdx) { lastIdx = idx; paintCurrentLine(idx); }
+      for (let i = 0; i < dispLines.length; i++) { if (dispLines[i].t <= sec) idx = i; else break; }
+      if (idx !== lastIdx) {
+        lastIdx = idx;
+        if (lyricMode === 5) paintActiveFive(idx); else paintCurrentLine(idx);
+      }
+      // 逐字：当前句每帧刷词进度（这正是逐字的意义所在）
+      if (karaOn && idx >= 0) paintKaraWords(dispLines[idx], sec * 1000);
     } else if (lastIdx !== -1) {
       lastIdx = -1;
-      paintCurrentLine(-1);
+      if (lyricMode === 5) paintActiveFive(-1); else paintCurrentLine(-1);
     }
     paintTransport();
     raf = window.requestAnimationFrame(tick);
@@ -1343,6 +1500,9 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   return () => {
     offNotify();
     window.clearTimeout(animTimer);
+    window.clearTimeout(infoTimer);
+    window.clearTimeout(browseTimer);
+    lyricsBox.removeEventListener("wheel", onLyricWheel);
     if (raf) window.cancelAnimationFrame(raf);
     raf = 0;
     running = false;
@@ -1361,7 +1521,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 export default definePlugin({
   id: "flowscape",
   name: "Flowscape 流境",
-  version: "1.4.0",
+  version: "1.5.0",
   author: "Team Quaver",
   kind: "third-party",
   description: "一个复刻移动听歌史上最经典的播放页模式的插件",
@@ -1377,16 +1537,28 @@ export default definePlugin({
       id: "flowscape-main",
       title: "接管播放页",
       render(box) {
+        //  lyricRows：单行（默认）/ 五行 —— 与 renderFlowscape 的 buildLyrics 读的是同一个键
+        const rowMode = () => (ctx.storage.get("lyrows") === "5" ? 5 : 1);
         box.innerHTML = `
           <div class="set-label">接管正在播放页 <span class="set-note-inline">开启后在正在播放页里隐藏原播放条，控制与进度改由流境自绘</span></div>
           <div class="opt-cards">
             <button class="opt-card" data-opt="on" type="button">开启</button>
             <button class="opt-card" data-opt="off" type="button">关闭</button>
           </div>
-          <p class="muted set-hint">流境接管整个正在播放页：封面在中间，上一首在左、下一首在右（点侧封面直接跳到那一首），下方是歌名、歌手、专辑与当前这一句歌词（点歌词跳播）。底部自绘进度条（可拖拽）、音量与音质；左上角是「收起」与「更多选项」—— 接管时原播放条会被隐藏，不从这里收起就只能按 ESC 了。停用本插件或关掉上面的开关，即回到默认正在播放页。</p>`;
+          <div class="set-label">歌词行数 <span class="set-note-inline">单行只显示当前这一句；过长会自适应缩字号而不是被裁断。五行排成整段歌词，当前句居中，滚轮 / 触控板可翻阅（停手 3 秒回到跟随）</span></div>
+          <div class="opt-cards">
+            <button class="opt-card" data-lyr="1" type="button">单行</button>
+            <button class="opt-card" data-lyr="5" type="button">五行</button>
+          </div>
+          <p class="muted set-hint">流境接管整个正在播放页：封面在中间，上一首在左、下一首在右（点侧封面直接跳到那一首），下方是歌名、歌手、专辑与歌词（点歌词跳播）。底部自绘进度条（可拖拽）、音量与音质（「更多选项」在音质选择器左边）；左上角是「收起」—— 接管时原播放条会被隐藏，不从这里收起就只能按 ESC 了。停用本插件或关掉上面的开关，即回到默认正在播放页。</p>`;
         const cards = [...box.querySelectorAll<HTMLButtonElement>("[data-opt]")];
-        const sync = () => cards.forEach((b) => b.classList.toggle("sel", (b.dataset.opt === "on") === on()));
+        const lyrCards = [...box.querySelectorAll<HTMLButtonElement>("[data-lyr]")];
+        const sync = () => {
+          cards.forEach((b) => b.classList.toggle("sel", (b.dataset.opt === "on") === on()));
+          lyrCards.forEach((b) => b.classList.toggle("sel", Number(b.dataset.lyr) === rowMode()));
+        };
         cards.forEach((b) => { b.onclick = () => { ctx.storage.set("flow", b.dataset.opt === "off" ? "off" : "on"); sync(); }; });
+        lyrCards.forEach((b) => { b.onclick = () => { ctx.storage.set("lyrows", b.dataset.lyr!); sync(); }; });
         sync();
       },
     });
