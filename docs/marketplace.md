@@ -13,6 +13,8 @@ Marketplace 是一个**静态 JSON 索引** + 主进程代下载的最小分发�
       "id": "die-for-you",
       "name": "Die For You 歌词",
       "version": "1.0.0",
+      "minHostVersion": "1.4.0",
+      "allowBeta": true,
       "author": "quaver",
       "description": "设置页随机展示《Die For You》歌词",
       "category": "plugin",
@@ -26,6 +28,8 @@ Marketplace 是一个**静态 JSON 索引** + 主进程代下载的最小分发�
 
 - `download` 必须直指**单文件 ESM .js**（default export 插件对象）。v1 不做 zip 分发。
 - `hash` 存在时主进程下载后校验 sha256，不匹配拒绝落盘（只防运输损坏，不防恶意）。
+- `minHostVersion` 可选，表示插件要求的最低 Quaver 版本（SemVer）；宿主版本低于该值时拒绝安装。
+- `allowBeta` 可选布尔值，默认为 `false`；为 `true` 时允许同一版本号的 Beta 宿主满足 `minHostVersion`。
 - `id` 必须匹配 `^[a-z0-9][a-z0-9-]*$`（同时也是安装目录名）。
 - `category` 是设置页里的分类归档：`theme`（主题）/ `plugin`（插件）/ `extension`（扩展）；
   缺省或未知值按 `plugin` 处理。
@@ -64,7 +68,7 @@ Marketplace 标签里**红色渐变的「添加本地插件」**按钮：
 
 ```
 <configDir()>/plugins/<plugin-id>/
-├── plugin.json   # { id, name, version, author?, description?, category?, main: "main.js" }
+├── plugin.json   # { id, name, version, minHostVersion?, allowBeta?, author?, description?, category?, main: "main.js" }
 └── main.js       # ESM：export default <SparklePlugin>
 ```
 

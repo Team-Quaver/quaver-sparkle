@@ -13,6 +13,8 @@ export default definePlugin({
   id: "my-plugin",        // kebab-case；第三方必须与安装目录名一致
   name: "My Plugin",
   version: "1.0.0",
+  minHostVersion: "1.4.0", // 可选：低于此 Quaver 版本时不允许安装
+  allowBeta: true,          // 可选：允许 1.4.0-beta.x 满足上面的最低版本
   author: "you",
   description: "…",
   kind: "third-party",    // 官方插件为 "official"

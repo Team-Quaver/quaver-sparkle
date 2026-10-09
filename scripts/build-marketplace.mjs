@@ -23,6 +23,7 @@ const OUT = join(ROOT, "dist", "site");
 
 const ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const CATEGORIES = ["theme", "plugin", "extension"];
+const SEMVER_RE = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 // esbuild 是本仓库唯一 devDependency（CI 里 pnpm install 提供）。作为 submodule 挂在
 // quaver 检出里本地验证时，退回宿主的 ui/node_modules 借一份。
@@ -70,6 +71,10 @@ for (const name of (await readdir(MARKET_DIR, { withFileTypes: true })).filter((
   if (meta.id !== name) fail(`${name}: plugin.json 的 id（${meta.id}）必须与目录名一致`);
   if (typeof meta.name !== "string" || !meta.name.trim()) fail(`${name}: 缺 name`);
   if (typeof meta.version !== "string" || !meta.version.trim()) fail(`${name}: 缺 version`);
+  if (meta.minHostVersion !== undefined && (typeof meta.minHostVersion !== "string" || !SEMVER_RE.test(meta.minHostVersion.trim()))) {
+    fail(`${name}: minHostVersion 必须是合法 SemVer`);
+  }
+  if (meta.allowBeta !== undefined && typeof meta.allowBeta !== "boolean") fail(`${name}: allowBeta 必须是 boolean`);
   const category = meta.category ?? "plugin";
   if (!CATEGORIES.includes(category)) fail(`${name}: category 必须是 ${CATEGORIES.join(" / ")}（当前：${category}）`);
 
@@ -94,6 +99,8 @@ for (const name of (await readdir(MARKET_DIR, { withFileTypes: true })).filter((
     id: name,
     name: meta.name,
     version: meta.version,
+    minHostVersion: meta.minHostVersion ?? undefined,
+    allowBeta: meta.allowBeta ?? undefined,
     author: meta.author ?? undefined,
     description: meta.description ?? undefined,
     category,

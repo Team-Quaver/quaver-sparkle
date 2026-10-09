@@ -17,6 +17,8 @@ marketplace/<id>/
 | `id` | ✓ | kebab-case，必须与目录名一致（同时是用户侧安装目录名） |
 | `name` | ✓ | 展示名 |
 | `version` | ✓ | semver |
+| `minHostVersion` |  | 最低 Quaver 宿主版本（SemVer）；低于该版本时不允许安装 |
+| `allowBeta` |  | 是否允许同一版本号的 Beta 宿主满足 `minHostVersion`，默认 `false` |
 | `author` |  | 作者 |
 | `description` |  | 一句话说明（列表里展示） |
 | `category` |  | `theme` / `plugin` / `extension`；缺省按 `plugin`（设置页分类据此归档） |

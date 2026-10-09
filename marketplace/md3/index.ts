@@ -350,6 +350,8 @@ export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
   version: "1.3.0",
+  minHostVersion: "1.4.0",
+  allowBeta: true,
   kind: "third-party",
   author: "Team Quaver",
   // 这里**不能**写 category —— SDK 的 SparklePlugin 没有这个字段（写了 tsc 报 TS2353）。

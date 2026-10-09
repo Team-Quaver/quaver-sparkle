@@ -14,6 +14,10 @@ export interface SparklePlugin {
   name: string;
   /** semver 字符串 */
   version: string;
+  /** 可选的最低宿主版本；低于此版本的宿主不允许安装或启用插件 */
+  minHostVersion?: string;
+  /** 是否允许同一版本号的 Beta 宿主满足最低版本要求；默认为 false */
+  allowBeta?: boolean;
   author?: string;
   description?: string;
   kind: PluginKind;
