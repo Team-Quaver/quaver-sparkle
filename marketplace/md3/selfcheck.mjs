@@ -186,6 +186,11 @@ ok("正在播放页与 Flowscape 信息行有独立行高（不被全局 body 20
   /& \.np-artist \{[^}]*line-height:\s*1\.35/.test(noComments) &&
   /& \.fs-title \{[^}]*line-height:\s*1\.25/.test(noComments) &&
   /& \.fs-artist, & \.fs-album \{[^}]*line-height:\s*1\.35/.test(noComments));
+ok("搜索页标题与 Tag 栏有独立气口（不吃全局 20px 行高 / 旧 4px 下距）",
+  /& \.search-head \.page-title \{[^}]*margin:[^;]*16px/.test(noComments) &&
+  /& \.search-head \.page-title \{[^}]*line-height:\s*1\.2/.test(noComments) &&
+  /& \.search-head \.search-tabs \{[^}]*margin-bottom:\s*18px/.test(noComments));
+
 
 ok("接管颜色不再有 default 档（开启即 theme/deep，关闭才是原版）",
   !noComments.includes(':not([data-md3-np-color="default"])') &&

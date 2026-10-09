@@ -162,6 +162,11 @@ const COMPONENTS = `
   & .np-title { line-height: 1.25; }
   & .np-artist { line-height: 1.35; }
 
+  /* 搜索页大标题 + Tag 栏是一行式页头：M3 刻度下再给一点纵向气口，
+     否则 26px 标题沿用全局 20px 行高，Tag 又贴在 4px 下边距上，观感很挤。 */
+  & .search-head .page-title { margin: 4px 0 16px; line-height: 1.2; }
+  & .search-head .search-tabs { gap: 8px; margin-bottom: 18px; }
+
   /* Flowscape 信息行同理：fs-title 用 clamp 到 29px，也必须按字号钉回行高。 */
   & .fs-title { line-height: 1.25; }
   & .fs-artist, & .fs-album { line-height: 1.35; }
