@@ -24,9 +24,11 @@ export default definePlugin({
       //   · 不写这个字段      = 主题自带强调色。宿主「让位」：不再往 :root 写 --cvg-*，
       //                        高亮色回落 --acc（上面那行极光绿），设置页的「高亮颜色」整组禁用。
       //                        本示例就是这种 —— 主题覆盖了 --acc，让位后高亮色自然跟着走。
-      //   · { mode: "host" }  = 高亮色交给用户调（固定青色 / 跟随封面 / 自定义色三档）
+      //   · { mode: "host" }  = 高亮色交给用户调（固定青色 / 跟随封面 / 系统强调色 / 自定义色四档）
       //   · { mode: "presets", presets: [{ id, label, color }] } = 你给几套方案让用户挑，
-      //                        第一个是默认；color 必须是 #rgb / #rrggbb（非法项会被忽略）
+      //                        第一个是默认；color 必须是 #rgb / #rrggbb，或哨兵值 "system"
+      //                        （= 跟随系统强调色：Noctalia / matugen 模板、KDE / GNOME…），
+      //                        非法项会被忽略
       //
       // 背景归谁管 —— SDK 的 SparkleTheme.background，两种写法：
       //   · 不写这个字段      = 主题自带背景。宿主「让位」：那层环境色（当前曲封面 / 用户自定义图）

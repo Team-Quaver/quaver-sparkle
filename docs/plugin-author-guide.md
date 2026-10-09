@@ -140,15 +140,15 @@ ctx.registerTheme({
 ### 高亮色（tint）归谁管 —— `theme.tint`
 
 宿主的高亮色（`--cvg-accent` / `--cvg-glow` / 播放条的 `--cvg-bar-fill` / `--cvg-bar-line`）
-平时由用户「设置 → 外观 → 高亮颜色」控制（固定青色 / 跟随封面 / 自定义色），并且是以
-**行内样式**写在 `:root` 上的。行内样式压过任何选择器 —— 所以你在 `css` 里写 `--cvg-accent`
-抢不赢。要拿到高亮色，靠的是**声明归属**，而不是抢变量：
+平时由用户「设置 → 外观 → 高亮颜色」控制（固定青色 / 跟随封面 / **系统强调色** / 自定义色），
+并且是以**行内样式**写在 `:root` 上的。行内样式压过任何选择器 —— 所以你在 `css` 里写
+`--cvg-accent` 抢不赢。要拿到高亮色，靠的是**声明归属**，而不是抢变量：
 
 | 写法 | 谁管高亮色 | 效果 |
 | --- | --- | --- |
 | **不写 `tint`**（默认） | 主题 | 宿主**让位**：不再写那几个变量，`--cvg-accent` 回落 `:root { --cvg-accent: var(--acc) }`。你只要在 `css` 里覆盖 `--acc`，高亮色就跟着走。设置页的「高亮颜色」整组禁用并注明由你接管 |
-| `tint: { mode: "host" }` | 用户 | 宿主那三档照常生效，用户可自由改 |
-| `tint: { mode: "presets", presets: [...] }` | 用户（在你的方案里挑） | 你在设置页提供几套高亮方案，用户选一套。`presets[0]` 是默认；`color` 必须是 `#rgb` / `#rrggbb`，`id`/`label` 非空且 `id` 不重复，非法项会被忽略 |
+| `tint: { mode: "host" }` | 用户 | 宿主那四档照常生效，用户可自由改 |
+| `tint: { mode: "presets", presets: [...] }` | 用户（在你的方案里挑） | 你在设置页提供几套高亮方案，用户选一套。`presets[0]` 是默认；`color` 必须是 `#rgb` / `#rrggbb` **或哨兵值 `"system"`**（= 跟随系统强调色，见下），`id`/`label` 非空且 `id` 不重复，非法项会被忽略 |
 
 ```ts
 // 1) 不写 tint：主题自带强调色（下面 --acc 的紫），宿主让位 → 高亮色跟着紫走
@@ -168,6 +168,39 @@ ctx.registerTheme({
     { id: "amber", label: "琥珀", color: "#ffb648" },
   ] },
 });
+
+// 4) 再加一档「跟随系统强调色」：color 写哨兵值 "system" —— 宿主探测系统强调色
+//    （Noctalia / matugen 模板产物、KDE / GNOME / GTK / macOS / Windows），换桌面配色自动跟随。
+//    读不到系统强调色时宿主回落到你的第一套非哨兵方案（所以至少留一套具体色值更稳）。
+ctx.registerTheme({
+  id: "t4", name: "T4", css: `…`,
+  tint: { mode: "presets", presets: [
+    { id: "violet", label: "紫罗兰", color: "#8a7dff" },
+    { id: "system", label: "系统强调色", color: "system" },
+  ] },
+});
+```
+
+**「系统强调色」是什么**：宿主按这个顺序探测一个源色 —— 用户配置目录里的
+`system-theme.json` / `system-theme.css`（Noctalia / matugen 的模板写给它，最推荐）→
+Noctalia 的当前配色（`colors.json`、v5 `palettes/<name>.json`、社区配色缓存）→
+`~/.cache/matugen/colors.json` → KDE `kdeglobals` 的 `AccentColor` → GNOME `gsettings
+accent-color` → GTK css 的 `@define-color accent_bg_color` → macOS / Windows 的系统强调色。
+Noctalia 用户在 `~/.config/noctalia/templates.toml` 里加一条：
+
+```toml
+[theme.templates.user.quaver]
+input_path  = "$XDG_CONFIG_HOME/noctalia/templates/quaver-music.json"
+output_path = "$XDG_CONFIG_HOME/quaver-music/system-theme.json"
+```
+
+配一个模板文件 `~/.config/noctalia/templates/quaver-music.json`（matugen 同款语法）：
+
+```json
+{
+  "dark":  { "primary": "{{ colors.primary.dark.hex }}" },
+  "light": { "primary": "{{ colors.primary.light.hex }}" }
+}
 ```
 
 用户挑了哪一套按主题 id 存在本地，在主题之间来回切不丢。无论哪种模式，你都**不该**再写 `--cvg-*`。

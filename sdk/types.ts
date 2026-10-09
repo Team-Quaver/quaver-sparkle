@@ -64,7 +64,12 @@ export interface SparkleSettingsSection {
 export interface SparkleTintPreset {
   id: string;
   label: string;
-  /** 颜色字面量：`#rgb` / `#rrggbb`。宿主会解析校验，非法项忽略并 warn。 */
+  /**
+   * 颜色字面量：`#rgb` / `#rrggbb`；或哨兵值 `"system"` = 跟随**系统强调色**（宿主探测
+   * Noctalia / matugen 模板产物、KDE / GNOME / GTK / macOS / Windows 的系统强调色）。
+   * 宿主会解析校验，非法项忽略并 warn。`"system"` 读不到系统强调色时，宿主回落到你的
+   * 第一套非哨兵方案（一套都没有则无色，让主题自己的 `--acc` 显出来）。
+   */
   color: string;
 }
 
@@ -77,8 +82,10 @@ export interface SparkleTintPreset {
  * 主题只要覆盖 `--acc` / `--cyan`，让位后的高亮色就自动跟着主题走 —— 这是最省事的写法。
  *
  * 声明了 = 主题把高亮色让给宿主，用户可在设置页继续调：
- *   · `mode: "host"`    完全交给宿主的 tint 系统（固定青色 / 跟随封面 / 自定义色三档）；
+ *   · `mode: "host"`    完全交给宿主的 tint 系统（固定青色 / 跟随封面 / 系统强调色 / 自定义色四档）；
  *   · `mode: "presets"` 主题自带几套方案，用户在这些方案里挑（`presets[0]` 是默认）。
+ *     方案的 `color` 还可以写 `"system"` = 跟随系统强调色（Noctalia / matugen / KDE / GNOME…，
+ *     见 SparkleTintPreset）。
  * 两种模式下主题都**不应**再写 `--cvg-*` —— 那是宿主的地盘，写了也会被内联样式压掉。
  */
 export interface SparkleThemeTint {
