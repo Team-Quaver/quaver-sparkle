@@ -88,21 +88,32 @@ ok("状态层四档齐备（hover/focus/pressed/drag）", ["hover", "focus", "pr
 // —— 5. 预设色表 ——
 ok("预设色至少 2 套（1 套 = Tint 设置里没得选）", TINT_PRESETS.length >= 2, `当前 ${TINT_PRESETS.length}`);
 ok("预设色 id 唯一", new Set(TINT_PRESETS.map((p) => p.id)).size === TINT_PRESETS.length);
-ok("预设色色值与标签齐备（#hex，或 host 的 'system' 哨兵 = 跟随系统强调色）",
-  TINT_PRESETS.every((p) => (/^#[0-9a-f]{6}$/i.test(p.color) || p.color === "system") && p.label && p.id));
+ok("预设色色值与标签齐备（#hex，或 host 的 'system'/'cover' 哨兵）",
+  TINT_PRESETS.every((p) =>
+    (/^#[0-9a-f]{6}$/i.test(p.color) || p.color === "system" || p.color === "cover") && p.label && p.id));
 ok("哨兵方案只出现一次、且不在第一位（第一位是默认档，得是具体色值）",
-  TINT_PRESETS.filter((p) => p.color === "system").length <= 1 && TINT_PRESETS[0].color !== "system");
+  TINT_PRESETS.filter((p) => p.color === "system").length <= 1 &&
+  TINT_PRESETS.filter((p) => p.color === "cover").length === 1 &&
+  TINT_PRESETS[0].color !== "system" && TINT_PRESETS[0].color !== "cover");
 
 // —— 6. 接线：走真实的 setup() 注册路径取主题对象（不是另调一个字符串构造函数） ——
 let theme;
-plugin.setup({ registerTheme: (t) => { theme = t; } });
+let settingsSection;
+plugin.setup({
+  storage: { get: () => null, set: () => {}, remove: () => {}, keys: () => [] },
+  registerTheme: (t) => { theme = t; },
+  registerSettingsSection: (s) => { settingsSection = s; },
+});
 const css = theme?.css ?? "";
 ok("setup() 确实 registerTheme 了一个主题", !!theme);
 ok("主题 id 与插件 id 一致", theme?.id === plugin.id && plugin.id === "md3");
 ok("tint 交给主题自带方案（presets）—— 这就是设置页的 Tint 入口", theme?.tint?.mode === "presets");
 ok("Tint 方案就是 token 表里那份（没在 index.ts 里另抄一份）", theme?.tint?.presets === TINT_PRESETS);
+ok("Tint 方案包含封面颜色哨兵档", theme?.tint?.presets?.some((p) => p.color === "cover") === true);
 ok("不声明 menus / background（缺省 = 主题接管）", theme?.menus === undefined && theme?.background === undefined);
 ok("插件 kind = third-party", plugin.kind === "third-party");
+ok("主题设置区注册成功（正在播放 / Flowscape 接管开关）",
+  settingsSection?.id === "md3-theme" && settingsSection?.title === "主题设置");
 // SDK 的 SparklePlugin 只有 id/name/version/kind/author/description/setup —— 多写一个字段
 // 会被 TS 的 excess-property 检查直接判死（TS2353）。category/main 是**安装元数据**，
 // 只属于 plugin.json。这条断言就是为「顺手把 category 写进插件对象」这个坑准备的。
@@ -161,6 +172,26 @@ for (const m of noComments.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
 }
 ok("缩态护栏：覆盖缩态也声明过的属性（.sidebar/.nav a/.user/.pl）都关在 :not(.side-collapsed) 里",
   leaked.length === 0, leaked.join(" ｜ "));
+
+ok("展开态主菜单项高度与项间 Gap 回到 40px / 4px",
+  /& body:not\(\.side-collapsed\) \.nav a \{[^}]*min-height:\s*40px/.test(noComments) &&
+  /& \.nav \{[^}]*gap:\s*4px/.test(noComments));
+ok("侧栏歌单区不再压缩成 0 Gap（40px 条目 + 4px 间距 + 2px 行距）",
+  /& body:not\(\.side-collapsed\) \.pl \{[^}]*min-height:\s*40px/.test(noComments) &&
+  /& \.playlists \{[^}]*gap:\s*4px/.test(noComments) &&
+  /& body:not\(\.side-collapsed\) \.pl \.pname \{[^}]*gap:\s*2px/.test(noComments));
+
+ok("正在播放页与 Flowscape 信息行有独立行高（不被全局 body 20px 行高压扁）",
+  /& \.np-title \{[^}]*line-height:\s*1\.25/.test(noComments) &&
+  /& \.np-artist \{[^}]*line-height:\s*1\.35/.test(noComments) &&
+  /& \.fs-title \{[^}]*line-height:\s*1\.25/.test(noComments) &&
+  /& \.fs-artist, & \.fs-album \{[^}]*line-height:\s*1\.35/.test(noComments));
+
+ok("接管颜色不再有 default 档（开启即 theme/deep，关闭才是原版）",
+  !noComments.includes(':not([data-md3-np-color="default"])') &&
+  /&\[data-md3-np="on"\] \.np/.test(noComments) &&
+  /&\[data-md3-np="on"\]\[data-md3-np-color="theme"\] \.np/.test(noComments) &&
+  /&\[data-md3-np="on"\]\[data-md3-np-color="deep"\] \.np/.test(noComments));
 
 ok("满幅：.body 去掉了外距与间距",
   /& \.body\s*\{(?=[^}]*padding:\s*0)(?=[^}]*gap:\s*0)/.test(noComments));
@@ -251,7 +282,7 @@ try {
   // 任意色相下对比度恒定本就是 tone 锚定的不变量，用其余七套色相家族代表。
   const perScheme = { light: [], dark: [] };
   for (const p of TINT_PRESETS) {
-    if (p.color === "system") continue;
+    if (p.color === "system" || p.color === "cover") continue;
     const src = rgbToLch(anyColor(toBarColors(anyColor(p.color)).line));
     for (const [scheme, table] of [["light", LIGHT_ROLES], ["dark", DARK_ROLES]]) {
       const render = (name) => {

@@ -151,10 +151,20 @@ const COMPONENTS = `
   & .content-top { min-height: 64px; padding: 0 24px; }
   /* 搜索框：M3 search 是 56px，但顶栏里还并排着别的东西，取 40px 与 app bar 的比例协调 */
   & .sb-field { height: 40px; padding: 0 16px; border-color: transparent; background: var(--md-surface-container-high); }
-  /* 抽屉项 56px —— 只在展开态覆盖（缩态自己声明了 padding/gap，见上面 ⚠️） */
-  & body:not(.side-collapsed) .nav a { min-height: 56px; padding: 0 16px; gap: 12px; }
-  & body:not(.side-collapsed) .sidebar { padding: 16px 12px; }
+  /* 菜单项回到 40px，项间 Gap 回到 4px：min-height 是命中区，nav gap 才是纵向节奏。
+     只在展开态覆盖（缩态自己声明了 padding/gap，见上面 ⚠️） */
+  & body:not(.side-collapsed) .nav a { min-height: 40px; padding: 0 14px; gap: 12px; }
+  & body:not(.side-collapsed) .sidebar { padding: 14px 10px; gap: 8px; }
   & .nav { gap: 4px; }
+
+  /* 正在播放页标题/歌手不吃全局 body 的 14/20 排版：
+     宿主这两行原本没钉 line-height，标题 22px 会被 20px 行高裁边。 */
+  & .np-title { line-height: 1.25; }
+  & .np-artist { line-height: 1.35; }
+
+  /* Flowscape 信息行同理：fs-title 用 clamp 到 29px，也必须按字号钉回行高。 */
+  & .fs-title { line-height: 1.25; }
+  & .fs-artist, & .fs-album { line-height: 1.35; }
   /* M3 图标按钮 40px 全圆（宿主 36px / 9px 圆角） */
   & .side-btn { width: 40px; height: 40px; border-radius: var(--md-shape-full); }
   & .user { border-radius: var(--md-shape-full); }
@@ -165,11 +175,19 @@ const COMPONENTS = `
   & .nav a::before { display: none; }
   & .nav a.active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 
-  /* —— 列表行 / 歌单行：M3 list item 56px 起 —— */
+  /* —— 列表行 / 歌单行：歌单条目保持 40px 命中区，条目间给 4px 纵向 Gap；
+     两行标题/副题再留 2px 内部行距。compact 版会让歌单区挤成一团。 —— */
   & .row { min-height: 56px; padding: 0 16px; border-radius: var(--md-shape-s); }
   & .pl { min-height: 56px; border-radius: var(--md-shape-full); }
+  & body:not(.side-collapsed) .pl { min-height: 40px; padding: 4px 8px; }
+  & body:not(.side-collapsed) .pl .pname { gap: 2px; }
+  & .playlists { gap: 4px; }
+  & .pl-group { padding: 8px 8px 2px; }
   & .row.sel { box-shadow: inset 3px 0 0 var(--md-primary); }
   & .row.playing { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+  /* 侧栏歌单当前项：与导航 / 正在播放行同一对「选中容器」语义 */
+  & .pl.active { background: var(--md-secondary-container); }
+  & .pl.active .pname { color: var(--md-on-secondary-container); }
 
   /* —— 队列面板「正在播放」那条 ——
      本体（style.css:1097）把它写成 color-mix(--cvg-glow 26%, --tint-row) 的底 +
@@ -217,6 +235,81 @@ const COMPONENTS = `
   }
 `;
 
+/**
+ * 正在播放 / Flowscape 的可选接管。
+ *
+ * 宿主默认页和 Flowscape 都铺在 .np 上：默认页自带深色玻璃，Flowscape 则直接借这层
+ * 背景。这里的开关就是把「主题要不要越过这层默认视觉」拆出来 —— 关闭时保持
+ * Quaver Design 的原版封面氛围；开启后颜色只在「随主题设置 / 深空黑」里选。
+ *
+ * 历史版本曾把 default 作为颜色档位；现在运行时把旧值或缺省值都归一到 theme，
+ * 避免接管开着却仍然保留原版视觉的歧义。
+ */
+const NP_OVERRIDES = `
+  &[data-md3-np="on"] .np {
+    background: var(--md-surface);
+    /* 封面氛围层只服务原来的深色玻璃；接管后关掉它，避免 M3 表面底下漏出随机封面色 */
+    & .np-bg { opacity: 0 !important; }
+    & .np-scrim { background: transparent; }
+    /* 默认页的标题 / 歌词沿用白字口径；换成 M3 on-surface 才能在浅色方案下读清 */
+    & .np-title, & .np-ly-line, & .np-ly-line.cur { color: var(--md-on-surface); }
+    & .np-artist { color: var(--md-on-surface-variant); }
+    & .np-ly-empty { color: color-mix(in srgb, var(--md-on-surface) 62%, transparent); }
+    /* 页内菜单从「恒深色玻璃」改回 M3 的 elevation 表面，与全站菜单一致 */
+    --menu-surface: var(--md-surface-container-high);
+    --menu-line: var(--md-outline-variant);
+    & .np-menu-item, & .np-menu-switch, & .np-menu-size, & .np-menu-size button { color: var(--md-on-surface); }
+    & .np-menu-empty, & .np-size-val { color: var(--md-on-surface-variant); }
+    & .np-menu-item:hover:not(:disabled),
+    & .np-menu-switch:hover,
+    & .np-menu-size:hover,
+    & .np-menu-size button:hover:not(:disabled) {
+      color: var(--md-on-surface);
+      background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+    }
+    /* Flowscape 自绘文字默认白字；只覆盖主要信息层，控制带的硬编码色留给深空黑档 */
+    & .fs-title { color: var(--md-on-surface); }
+    & .fs-artist { color: color-mix(in srgb, var(--md-on-surface) 82%, transparent); }
+    & .fs-album { color: color-mix(in srgb, var(--md-on-surface) 64%, transparent); }
+    & .fs-ly-empty { color: color-mix(in srgb, var(--md-on-surface) 58%, transparent); }
+    & .fs-iconbtn { color: color-mix(in srgb, var(--md-on-surface) 84%, transparent); }
+    & .fs-qbtn { color: color-mix(in srgb, var(--md-on-surface) 88%, transparent); border-color: var(--md-outline-variant); }
+    & .fs-pop { background: var(--md-surface-container-high); border-color: var(--md-outline-variant); }
+    & .fs-qi, & .fs-mrow { color: color-mix(in srgb, var(--md-on-surface) 88%, transparent); }
+    & .fs-qi:hover, & .fs-mrow:hover { color: var(--md-on-surface); background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  }
+
+  /* 颜色档位 = 随主题设置：M3 surface 本身已带明暗两套角色 */
+  &[data-md3-np="on"][data-md3-np-color="theme"] .np {
+    background: var(--md-surface);
+  }
+
+  /* 颜色档位 = 深空黑：和封面氛围彻底脱钩，保留接管态原有白字的可读性 */
+  &[data-md3-np="on"][data-md3-np-color="deep"] .np {
+    background: #000;
+    & .np-scrim { background: #000; }
+    /* deep 档把 on 块换掉的菜单表面再拿回「恒深色」那一版 */
+    --menu-surface: #10131c;
+    --menu-line: rgba(255, 255, 255, .16);
+    & .np-title, & .np-ly-line, & .np-ly-line.cur { color: #fff; }
+    & .np-artist { color: #ffffffb8; }
+    & .np-ly-empty { color: #ffffff80; }
+    & .np-menu-item, & .np-menu-switch, & .np-menu-size, & .np-menu-size button { color: #ffffffe6; }
+    & .np-menu-empty, & .np-size-val { color: #ffffff8c; }
+    & .np-menu-item:hover:not(:disabled),
+    & .np-menu-switch:hover,
+    & .np-menu-size:hover,
+    & .np-menu-size button:hover:not(:disabled) {
+      color: #fff;
+      background: #ffffff1f;
+    }
+    & .fs-title { color: #fff; }
+    & .fs-artist { color: #ffffffcc; }
+    & .fs-album { color: #ffffff8f; }
+    & .fs-ly-empty { color: #ffffff7a; }
+  }
+`;
+
 /** 组装整份主题 CSS。 */
 function buildCss(): string {
   return `
@@ -242,19 +335,36 @@ ${schemeBlock("dark", "    ")}
 
   /* ===== 组件形态 ===== */
 ${COMPONENTS}
+
+  /* ===== 正在播放 / Flowscape 接管 ===== */
+${NP_OVERRIDES}
 `;
 }
 
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.1.0",
+  version: "1.3.0",
   kind: "third-party",
   author: "Team Quaver",
   // 这里**不能**写 category —— SDK 的 SparklePlugin 没有这个字段（写了 tsc 报 TS2353）。
   // category 是安装元数据，只属于 plugin.json（设置页据此把已装内容归入主题/插件/扩展）。
   description: "一款复刻 Material You 设计的主题插件",
   setup(ctx) {
+    // 两个开关都以 html dataset 暴露给主题 CSS：读 storage 初始化，设置页点击即时改。
+    const npOn = () => ctx.storage.get("np") !== "off";
+    const npColor = () => {
+      const v = ctx.storage.get("npColor");
+      // 旧版本可能存过 default；接管开启后不再允许这档，统一回落到随主题设置。
+      return v === "deep" ? "deep" : "theme";
+    };
+    const syncNpDataset = () => {
+      if (typeof document === "undefined") return;
+      document.documentElement.dataset.md3Np = npOn() ? "on" : "off";
+      document.documentElement.dataset.md3NpColor = npColor();
+    };
+    syncNpDataset();
+
     ctx.registerTheme({
       id: "md3",
       name: "Material Design 3",
@@ -264,6 +374,49 @@ export default definePlugin({
       tint: { mode: "presets", presets: TINT_PRESETS },
       // background / menus 都不声明 = 主题接管：
       // 背景走纯 M3 surface（不铺封面环境色），菜单走 M3 elevation 面板（不透玻璃）。
+    });
+
+    ctx.registerSettingsSection({
+      id: "md3-theme",
+      title: "主题设置",
+      render(box) {
+        box.innerHTML = `
+          <div class="set-label">是否介入正在播放页/Flowscape</div>
+          <div class="opt-cards">
+            <button class="opt-card" data-np="on" type="button">开启</button>
+            <button class="opt-card" data-np="off" type="button">关闭</button>
+          </div>
+          <p class="muted set-hint">开启后 Lumen 会统一正在播放页与 Flowscape 的表面色；关闭时保留它们原有的深色封面氛围。</p>
+
+          <div class="set-label" style="margin-top:14px">正在播放页/Flowscape 颜色</div>
+          <div class="opt-cards">
+            <button class="opt-card" data-np-color="theme" type="button">随主题设置</button>
+            <button class="opt-card" data-np-color="deep" type="button">深空黑</button>
+          </div>
+          <p class="muted set-hint">「随主题设置」使用当前 Lumen 明暗方案的 M3 表面；「深空黑」使用纯黑底色。</p>`;
+
+        const npCards = [...box.querySelectorAll<HTMLButtonElement>("[data-np]")];
+        const colorCards = [...box.querySelectorAll<HTMLButtonElement>("[data-np-color]")];
+        const sync = () => {
+          npCards.forEach((b) => b.classList.toggle("sel", (b.dataset.np === "on") === npOn()));
+          colorCards.forEach((b) => b.classList.toggle("sel", b.dataset.npColor === npColor()));
+        };
+        npCards.forEach((b) => {
+          b.onclick = () => {
+            ctx.storage.set("np", b.dataset.np === "on" ? "on" : "off");
+            syncNpDataset();
+            sync();
+          };
+        });
+        colorCards.forEach((b) => {
+          b.onclick = () => {
+            ctx.storage.set("npColor", b.dataset.npColor === "deep" ? "deep" : "theme");
+            syncNpDataset();
+            sync();
+          };
+        });
+        sync();
+      },
     });
   },
 });

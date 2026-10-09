@@ -148,7 +148,7 @@ ctx.registerTheme({
 | --- | --- | --- |
 | **不写 `tint`**（默认） | 主题 | 宿主**让位**：不再写那几个变量，`--cvg-accent` 回落 `:root { --cvg-accent: var(--acc) }`。你只要在 `css` 里覆盖 `--acc`，高亮色就跟着走。设置页的「高亮颜色」整组禁用并注明由你接管 |
 | `tint: { mode: "host" }` | 用户 | 宿主那四档照常生效，用户可自由改 |
-| `tint: { mode: "presets", presets: [...] }` | 用户（在你的方案里挑） | 你在设置页提供几套高亮方案，用户选一套。`presets[0]` 是默认；`color` 必须是 `#rgb` / `#rrggbb` **或哨兵值 `"system"`**（= 跟随系统强调色，见下），`id`/`label` 非空且 `id` 不重复，非法项会被忽略 |
+| `tint: { mode: "presets", presets: [...] }` | 用户（在你的方案里挑） | 你在设置页提供几套高亮方案，用户选一套。`presets[0]` 是默认；`color` 必须是 `#rgb` / `#rrggbb` 或哨兵值 `"system"`（跟随系统强调色）、`"cover"`（跟随当前封面主色），`id`/`label` 非空且 `id` 不重复，非法项会被忽略 |
 
 ```ts
 // 1) 不写 tint：主题自带强调色（下面 --acc 的紫），宿主让位 → 高亮色跟着紫走
@@ -169,14 +169,16 @@ ctx.registerTheme({
   ] },
 });
 
-// 4) 再加一档「跟随系统强调色」：color 写哨兵值 "system" —— 宿主探测系统强调色
-//    （Noctalia / matugen 模板产物、KDE / GNOME / GTK / macOS / Windows），换桌面配色自动跟随。
-//    读不到系统强调色时宿主回落到你的第一套非哨兵方案（所以至少留一套具体色值更稳）。
+// 4) 再加哨兵档：color 写 "system" = 跟随系统强调色（Noctalia / matugen 模板产物、
+//    KDE / GNOME / GTK / macOS / Windows），换桌面配色自动跟随；color 写 "cover" =
+//    跟随当前曲封面主色，换曲自动跟随。哨兵读不到时宿主回落到你的第一套非哨兵方案
+//    （所以至少留一套具体色值更稳）。
 ctx.registerTheme({
   id: "t4", name: "T4", css: `…`,
   tint: { mode: "presets", presets: [
     { id: "violet", label: "紫罗兰", color: "#8a7dff" },
     { id: "system", label: "系统强调色", color: "system" },
+    { id: "cover", label: "封面颜色", color: "cover" },
   ] },
 });
 ```

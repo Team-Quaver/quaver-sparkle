@@ -26,8 +26,8 @@ export default definePlugin({
       //                        本示例就是这种 —— 主题覆盖了 --acc，让位后高亮色自然跟着走。
       //   · { mode: "host" }  = 高亮色交给用户调（固定青色 / 跟随封面 / 系统强调色 / 自定义色四档）
       //   · { mode: "presets", presets: [{ id, label, color }] } = 你给几套方案让用户挑，
-      //                        第一个是默认；color 必须是 #rgb / #rrggbb，或哨兵值 "system"
-      //                        （= 跟随系统强调色：Noctalia / matugen 模板、KDE / GNOME…），
+      //                        第一个是默认；color 必须是 #rgb / #rrggbb，或哨兵值
+      //                        "system"（跟随系统强调色）/ "cover"（跟随当前封面主色）；
       //                        非法项会被忽略
       //
       // 背景归谁管 —— SDK 的 SparkleTheme.background，两种写法：

@@ -109,8 +109,8 @@ export const DARK_ROLES: Record<string, RoleValue> = {
 
 /** 主题自带的 Tint 方案。色值取 M3 常见源色 —— **只用到色相**（tone/彩度由上表固定），
  *  所以前七套换出来的是七种色相家族，明度结构与对比度完全一致。宿主会经 toUiColors 换成强调色。
- *  最后一套是哨兵值 "system" = 跟随系统强调色（Noctalia / matugen 模板、KDE / GNOME / GTK…）：
- *  源色实时来自宿主探测，读不到时宿主回落到第一套（紫罗兰）—— 与 M3 的 Material You 观感一致。 */
+ *  最后两套是哨兵值："system" 跟随系统强调色，"cover" 跟随当前曲封面主色；哨兵读不到时
+ *  宿主回落到第一套（紫罗兰）—— 与 M3 的 Material You 观感一致。 */
 export const TINT_PRESETS: { id: string; label: string; color: string }[] = [
   { id: "md3-purple", label: "紫罗兰", color: "#6750a4" }, // M3 baseline，官方方案即由它推出
   { id: "md3-blue", label: "靛蓝", color: "#0b57d0" },
@@ -120,6 +120,7 @@ export const TINT_PRESETS: { id: string; label: string; color: string }[] = [
   { id: "md3-red", label: "朱红", color: "#b3261e" },
   { id: "md3-magenta", label: "品红", color: "#8e4585" },
   { id: "md3-system", label: "系统强调色", color: "system" }, // 哨兵值，见宿主 sparkle/theme-tint.ts
+  { id: "md3-cover", label: "封面颜色", color: "cover" },   // 哨兵值，换曲后跟随封面主色
 ];
 
 // —— 形状刻度（M3 shape scale，单位 px；full = 全圆角） ——
