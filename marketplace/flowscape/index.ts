@@ -356,8 +356,12 @@ const CSS = `
    只写一个 CSS 变量就是一个词的进度，比逐词换 color 少一半重绘，也不用量任何坐标。
    基色取 65% 白（暗底上半透明白低于 .5 会看不清），已唱部分走高亮（主色 + 白，别拿
    封面原色当字色，浅色封面上会糊）。white-space 用 pre-wrap：长句仍能折行，
-   不会横向溢出被裁（pre 会禁止换行）。 */
-.fs-ll.kara{ font-weight:800; }
+   不会横向溢出被裁（pre 会禁止换行）。
+   **逐字行整体去掉 text-shadow**（含它的翻译行）：基底 .kw 与 ::after 高亮层各投一次
+   同样的阴影，两层几乎没有位移差 → alpha 复合后更黑，还压在高亮字上，观感就是
+   「阴影太怪」。普通行级歌词保留阴影（单层，只做可读性）。 */
+.fs-ll.kara{ font-weight:800; text-shadow:none; }
+.fs-ll.kara .t2{ text-shadow:none; }
 .fs-ll .kw{ position:relative; white-space:pre-wrap; color:#ffffffa6; }
 .fs-ll .kw::after{
   content:attr(data-t); position:absolute; left:0; top:0; white-space:pre-wrap;
