@@ -212,6 +212,14 @@ ok("满幅：顶带底片只收在 64px 的 app bar 那格，不再向下盖住�
 // 挡下滚内容的责任转到吸顶节点自己身上：没有这条，长列表会从吸顶条底下透出来。
 ok("满幅：吸顶条 / 吸顶页头自己铺实底 surface（否则下滚内容从吸顶区透出来）",
   /& \.sticky-bar, & \.sticky-head\s*\{[^}]*background:\s*var\(--md-surface\)/.test(noComments));
+// 光有实底还是不够：宿主那边「压不住的那截」一向是交给 .content::before 的渐隐化开的
+// （Quaver Design 下吸顶节点不画底）。M3 把底片搬到节点自己身上后，下缘成了硬边 ——
+// 正下滚过的行被拦腰切一刀，观感像 bug 而不是像 app bar。贴顶态必须补一条同色短渐隐
+// 化开切边 + 一根 outline-variant 发丝线画清 app bar 下界，且用 .stuck 门控
+// （未贴顶时不铺，第一屏版式纹丝不动）。
+ok("满幅：吸顶条 / 吸顶页头贴顶时下缘化开（硬边 = 内容被拦腰切一刀）",
+  /& \.sticky-bar::after, & \.sticky-head::after\s*\{[^}]*top:\s*100%[^}]*linear-gradient\([^}]*transparent/.test(noComments) &&
+  /& \.sticky-bar\.stuck::after, & \.sticky-head\.stuck::after\s*\{[^}]*opacity:\s*1/.test(noComments));
 ok("满幅：分隔条的负边距归零（否则盖住侧栏/内容各 10px 并吞掉那片点击）",
   /& \.side-resizer\s*\{[^}]*margin:\s*0/.test(noComments));
 ok("玻璃退场：主题显式关掉模糊，且不引入任何 blur",

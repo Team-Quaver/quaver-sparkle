@@ -157,8 +157,25 @@ const COMPONENTS = `
   }
   /* 吸顶条 / 吸顶页头 = M3 app bar：自己铺实底 surface。未贴顶时底色与内容区同色
      （--panel 就是 surface），等于不可见，版式照旧；贴顶后从底下滚过去的行被它挡住。
-     右缘那条 10px 滚动条槽露的是内容卡底色（同一个 surface），所以不会留缝。 */
+     右缘那条 10px 滚动条槽露的是内容卡底色（同一个 surface），所以不会留缝。
+
+     光有实底不够：宿主吸顶语言里「压不住的那截」一直是交给 .content::before 的渐隐
+     化开的（Quaver Design 下吸顶条自己不画底，全靠那层渐变；这里底片搬到了吸顶节点
+     身上，下缘就成了硬边）。正下滚过的行会被拦腰切一刀 —— 观感像 bug，不是像 app bar。
+     所以给贴顶态补两样：一根 outline-variant 发丝线画清 app bar 的下界 + 下缘 20px
+     同色渐隐，把切边化开。两层合起来读作「内容从 app bar 底下滑过去」。用 .stuck
+     （views.ts 的 trackStuck 写）门控：未贴顶时这两样都不铺，第一屏版式纹丝不动。 */
   & .sticky-bar, & .sticky-head { background: var(--md-surface); }
+  & .sticky-bar::after, & .sticky-head::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 20px;
+    background: linear-gradient(to bottom,
+      var(--md-surface) 0%,
+      color-mix(in srgb, var(--md-surface) 55%, transparent) 45%,
+      transparent 100%);
+    box-shadow: inset 0 1px 0 var(--md-outline-variant);
+    pointer-events: none; opacity: 0; transition: opacity .18s ease;
+  }
+  & .sticky-bar.stuck::after, & .sticky-head.stuck::after { opacity: 1; }
   /* 抽屉宽度：M3 navigation drawer = 360。宿主读的是 <body> 的 --side-w，所以写在 body 上。
      用户拖过分隔条后 body 上是**行内**值（shell.ts 写），行内优先 —— 那时以用户的为准。 */
   & body { --side-w: 360px; font-size: 14px; line-height: 20px; }
@@ -366,7 +383,7 @@ ${NP_OVERRIDES}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.3.2",
+  version: "1.3.3",
   minHostVersion: "1.4.1",
   allowBeta: true,
   kind: "third-party",
