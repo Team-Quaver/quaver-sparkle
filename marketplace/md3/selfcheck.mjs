@@ -200,8 +200,18 @@ ok("接管颜色不再有 default 档（开启即 theme/deep，关闭才是原�
 
 ok("满幅：.body 去掉了外距与间距",
   /& \.body\s*\{(?=[^}]*padding:\s*0)(?=[^}]*gap:\s*0)/.test(noComments));
-ok("满幅：顶带那条 112px 渐隐已关掉（满幅下顶栏是实底 app bar）",
-  /& \.content::before\s*\{\s*display:\s*none/.test(noComments));
+// 顶带底片（.content::before）：宿主那条 112px 渐隐铺在 .route 之上，满幅下顶栏是
+// 实底 app bar，不再需要它来做「标题栏」质感。但**不能整条删** —— 宿主把「吸顶条/页头
+// 压住下滚内容」全交给了这一层。上一版把它做成「app bar + 吸顶区」一整块的实底渐变，
+// 结果把内容区第一屏里不吸顶的大标题（我喜欢 / 设置 / 搜索页）整条盖掉（明暗都黑）。
+// 口径钉成：底片只收在 app bar 那一格（高度与顶带同为 64px，且不再跟 --stuck-h 联动）。
+ok("满幅：顶带底片只收在 64px 的 app bar 那格，不再向下盖住第一屏页头",
+  /& \.content::before\s*\{[^}]*height:\s*64px/.test(noComments) &&
+  /& \.content::before\s*\{[^}]*min-height:\s*64px/.test(noComments) &&
+  !/& \.content::before\s*\{[^}]*--stuck-h/.test(noComments));
+// 挡下滚内容的责任转到吸顶节点自己身上：没有这条，长列表会从吸顶条底下透出来。
+ok("满幅：吸顶条 / 吸顶页头自己铺实底 surface（否则下滚内容从吸顶区透出来）",
+  /& \.sticky-bar, & \.sticky-head\s*\{[^}]*background:\s*var\(--md-surface\)/.test(noComments));
 ok("满幅：分隔条的负边距归零（否则盖住侧栏/内容各 10px 并吞掉那片点击）",
   /& \.side-resizer\s*\{[^}]*margin:\s*0/.test(noComments));
 ok("玻璃退场：主题显式关掉模糊，且不引入任何 blur",

@@ -1,8 +1,8 @@
 {
   "id": "md3",
   "name": "Lumen 流光",
-  "version": "1.3.1",
-  "minHostVersion": "1.4.0",
+  "version": "1.3.2",
+  "minHostVersion": "1.4.1",
   "allowBeta": true,
   "author": "Team Quaver",
   "description": "一款复刻 Material You 设计的主题；高亮方案含「系统强调色」（Noctalia / matugen / KDE / GNOME）",
