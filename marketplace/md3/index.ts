@@ -306,7 +306,15 @@ const NP_OVERRIDES = `
       color: var(--md-on-surface);
       background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
     }
-    /* Flowscape 自绘文字默认白字；只覆盖主要信息层，控制带的硬编码色留给深空黑档 */
+    /* Flowscape 歌词与当前 surface 配对：主题色扫字，纯色表面不需要景深阴影。
+       变量落在 .np 上，避免插件加载顺序影响覆盖；行级与逐字共用同一前景色。 */
+    --fs-lyric-color: var(--md-on-surface);
+    --fs-lyric-unsung: color-mix(in srgb, var(--md-on-surface) 62%, transparent);
+    --fs-lyric-highlight: var(--md-primary);
+    --fs-lyric-shadow: none;
+    --fs-lyric-filter: none;
+    --fs-lyric-translation-shadow: none;
+    /* Flowscape 主要信息层 */
     & .fs-title { color: var(--md-on-surface); }
     & .fs-artist { color: color-mix(in srgb, var(--md-on-surface) 82%, transparent); }
     & .fs-album { color: color-mix(in srgb, var(--md-on-surface) 64%, transparent); }
@@ -327,6 +335,13 @@ const NP_OVERRIDES = `
   &[data-md3-np="on"][data-md3-np-color="deep"] .np {
     background: #000;
     & .np-scrim { background: #000; }
+    /* 深空黑独立于应用明暗：回到 Flowscape 的亮字与柔阴影默认值。 */
+    --fs-lyric-color: initial;
+    --fs-lyric-unsung: initial;
+    --fs-lyric-highlight: initial;
+    --fs-lyric-shadow: initial;
+    --fs-lyric-filter: initial;
+    --fs-lyric-translation-shadow: initial;
     /* deep 档把 on 块换掉的菜单表面再拿回「恒深色」那一版 */
     --menu-surface: #10131c;
     --menu-line: rgba(255, 255, 255, .16);
@@ -383,7 +398,7 @@ ${NP_OVERRIDES}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.3.3",
+  version: "1.3.4",
   minHostVersion: "1.4.1",
   allowBeta: true,
   kind: "third-party",

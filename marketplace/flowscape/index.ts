@@ -338,35 +338,38 @@ const CSS = `
 }
 .fs-lyrics.mode-five::-webkit-scrollbar{ width:0; height:0; }
 .fs-ll{
-  padding:.1em 4px; cursor:pointer; color:#fff; max-width:100%;
+  padding:.1em 4px; cursor:pointer; color:var(--fs-lyric-color,#fff); max-width:100%;
   font-size:calc(1em * var(--fs-fit,1)); font-weight:700; line-height:1.4;
-  text-shadow:0 2px 22px #00000073;
+  text-shadow:var(--fs-lyric-shadow,0 2px 22px #00000073);
   transition:opacity .26s ease, transform .26s ease;
 }
 .fs-lyrics.mode-five .fs-ll{ opacity:.4; padding:.2em 4px; }
 .fs-lyrics.mode-five .fs-ll.cur{ opacity:1; font-weight:800; }
 .fs-ll .t2{
   display:block; font-size:.56em; font-weight:400; opacity:.82; margin-top:.28em;
-  text-shadow:0 1px 12px #00000059;
+  text-shadow:var(--fs-lyric-translation-shadow,0 1px 12px #00000059);
 }
 .fs-lyrics.no-trans .fs-ll .t2{ display:none; }
-/* —— 逐字（宿主有逐字提供器 + 用户在设置里没关时接管）——
-   复用宿主已激活的提供器（AMLL）解析好的词级行，本插件只负责「当前这一句」的逐词染色。
-   染色做法：每个词底下垫一层同字文本的伪元素，用 clip-path 按 --p 从左往右揭开 ——
-   只写一个 CSS 变量就是一个词的进度，比逐词换 color 少一半重绘，也不用量任何坐标。
-   基色取 65% 白（暗底上半透明白低于 .5 会看不清），已唱部分走高亮（主色 + 白，别拿
-   封面原色当字色，浅色封面上会糊）。white-space 用 pre-wrap：长句仍能折行，
-   不会横向溢出被裁（pre 会禁止换行）。
-   **逐字行整体去掉 text-shadow**（含它的翻译行）：基底 .kw 与 ::after 高亮层各投一次
-   同样的阴影，两层几乎没有位移差 → alpha 复合后更黑，还压在高亮字上，观感就是
-   「阴影太怪」。普通行级歌词保留阴影（单层，只做可读性）。 */
-.fs-ll.kara{ font-weight:800; text-shadow:none; }
-.fs-ll.kara .t2{ text-shadow:none; }
-.fs-ll .kw{ position:relative; white-space:pre-wrap; color:#ffffffa6; }
-.fs-ll .kw::after{
-  content:attr(data-t); position:absolute; left:0; top:0; white-space:pre-wrap;
-  color:color-mix(in srgb, var(--fs-acc) 45%, #fff);
-  clip-path:inset(0 calc((1 - var(--p,0)) * 100%) 0 0);
+/* —— 逐字（复用 AMLL 提供器的词级时间轴）——
+   单份文字用 background-clip:text 扫色，--p 控制渐变的分界点。不要另排一份同字
+   伪元素：inline 换行后的片段与绝对定位文本的字形/基线可能不一致，叠起来会重影。
+   保留 inline + pre-wrap，让长词、空格与中英混排继续按原文本折行。
+   封面背景上，整句用一层柔阴影衬字；纯色表面的主题通过 --fs-lyric-* 同时提供
+   前景色、扫色和阴影策略。浅色表面用深色字，不靠白字的黑投影撑对比度。
+   透明字形不使用 text-shadow（会盖在渐变上），逐字主行仅在整句外投影。 */
+.fs-ll.kara{ font-weight:800; }
+.fs-ll.kara .t1{
+  display:block; text-shadow:none;
+  filter:var(--fs-lyric-filter,drop-shadow(0 2px 8px #0007));
+}
+.fs-ll.kara .t2{ text-shadow:var(--fs-lyric-translation-shadow,0 1px 6px #0006); }
+.fs-ll .kw{
+  white-space:pre-wrap;
+  background:linear-gradient(to right,
+    var(--fs-lyric-highlight,color-mix(in srgb, var(--fs-acc) 45%, #fff)) calc(var(--p,0) * 100%),
+    var(--fs-lyric-unsung,#ffffffa6) calc(var(--p,0) * 100%));
+  background-clip:text; -webkit-background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent;
 }
 .fs-ly-empty{ text-align:center; color:#ffffff7a; font-size:13px; padding:8px 0; }
 
@@ -956,15 +959,14 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     l.trans && ctx.showTrans() ? `<span class="t2">${esc(l.trans)}</span>` : "";
 
   /** 把一条歌词铺进元素；asWords=true 且有词级数据时走逐词 span（返回词元素表）。
-   *  词的文本走 textContent 写（不拼 HTML，免转义），同一份塞进 data-t —— CSS 用
-   *  `::after{content:attr(data-t)}` 叠一层同字文本，靠 clip-path 按 --p 从左揭开。 */
+   *  词的文本只通过 textContent 写一次（不拼 HTML，免转义），CSS 在原字形内扫色。 */
   const renderLine = (el: HTMLElement, l: DispLine, asWords: boolean): HTMLElement[] => {
     const useWords = asWords && !!l.words && l.words.length > 0;
     el.classList.toggle("kara", useWords);
     if (useWords) {
-      el.innerHTML = l.words!.map(() => `<span class="kw"></span>`).join("") + transHtml(l);
+      el.innerHTML = `<span class="t1">${l.words!.map(() => `<span class="kw"></span>`).join("")}</span>` + transHtml(l);
       const ws = [...el.querySelectorAll<HTMLElement>(".kw")];
-      l.words!.forEach((w, i) => { const e = ws[i]; if (e) { e.textContent = w.word; e.dataset.t = w.word; } });
+      l.words!.forEach((w, i) => { const e = ws[i]; if (e) { e.textContent = w.word; } });
       return ws;
     }
     el.innerHTML = `<span class="t1">${esc(l.text)}</span>` + transHtml(l);
@@ -1525,7 +1527,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 export default definePlugin({
   id: "flowscape",
   name: "Flowscape 流境",
-  version: "1.5.0",
+  version: "1.5.1",
   author: "Team Quaver",
   kind: "third-party",
   description: "一个复刻移动听歌史上最经典的播放页模式的插件",
