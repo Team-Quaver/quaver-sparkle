@@ -140,8 +140,20 @@ const COMPONENTS = `
   }
   /* 进度条裁切层原与播放条的 14px 圆角配成一对；播放条改直角后这里也归零 */
   & .pb-fill-clip { border-radius: 0; }
-  /* 顶带那条 112px 渐隐是给浮动卡做「标题栏」过渡的；满幅下顶栏是实底 app bar，用不上 */
-  & .content::before { display: none; }
+  /* 顶带那条 112px 渐隐是给浮动卡做「标题栏」过渡的；满幅下顶栏是实底 app bar，
+     本来整条 display:none —— 但**不能真删**：宿主下翻贴顶的吸顶条 / 吸顶页头
+     （歌单/歌手页的「名字 + 搜索/排序」、首页与我喜欢这类页头）就是吃这一层压住
+     从下面滚过去的行；删了它，长列表会直接从吸顶区底下透出来，看着很怪。
+     所以改成 M3 口径的同一层：app bar + 吸顶区 = 实底 surface，只有最底下 22px 化开。
+     高度对齐宿主：64px app bar + JS 写的 --stuck-h（当前吸顶区高度）。 */
+  & .content::before {
+    height: calc(64px + var(--stuck-h, 0px));
+    min-height: 120px;
+    background: linear-gradient(to bottom,
+      var(--md-surface) calc(100% - 22px),
+      color-mix(in srgb, var(--md-surface) 55%, transparent) calc(100% - 10px),
+      transparent 100%);
+  }
   /* 抽屉宽度：M3 navigation drawer = 360。宿主读的是 <body> 的 --side-w，所以写在 body 上。
      用户拖过分隔条后 body 上是**行内**值（shell.ts 写），行内优先 —— 那时以用户的为准。 */
   & body { --side-w: 360px; font-size: 14px; line-height: 20px; }
@@ -349,8 +361,8 @@ ${NP_OVERRIDES}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.3.0",
-  minHostVersion: "1.4.0",
+  version: "1.3.1",
+  minHostVersion: "1.4.1",
   allowBeta: true,
   kind: "third-party",
   author: "Team Quaver",
