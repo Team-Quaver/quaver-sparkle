@@ -296,6 +296,8 @@ export interface SparkleNpViewCtx {
   /** 歌词状态：idle / loading / ok / none */
   lyricState(): "idle" | "loading" | "ok" | "none";
   showTrans(): boolean;
+  /** 歌词辅助行模式：off=关闭 / translation=翻译 / romanization=注音（与翻译替换，无注音数据时回落翻译） */
+  lyricAux(): "off" | "translation" | "romanization";
   /**
    * 逐字歌词行（毫秒时间轴）。空数组 = 当前没有逐字数据。
    *
@@ -469,6 +471,17 @@ export interface SparkleKaraokeWord {
   word: string;
   startTime: number;
   endTime: number;
+  /** 单词级音译（AMLL 的 romanWord） */
+  romanWord?: string;
+  /** 单词级注音（AMLL 的 Ruby） */
+  ruby?: SparkleKaraokeRuby[];
+}
+
+/** Ruby 注音片段：时间轴供渲染器同步动画使用 */
+export interface SparkleKaraokeRuby {
+  word: string;
+  startTime: number;
+  endTime: number;
 }
 
 /** 逐字歌词行（与 @applemusic-like-lyrics/core 的 LyricLine 结构兼容） */
@@ -478,8 +491,10 @@ export interface SparkleKaraokeLine {
   startTime: number;
   /** 行结束时间（毫秒） */
   endTime: number;
-  /** 翻译歌词（宿主「翻译」开关关闭时由渲染方自行剔除） */
+  /** 翻译歌词（宿主「翻译」选项关闭时由渲染方自行剔除） */
   translatedLyric?: string;
+  /** 行级音译（宿主「音译」选项关闭时由渲染方自行剔除） */
+  romanLyric?: string;
   /** 背景人声行 */
   isBG?: boolean;
   /** 对唱行（靠右对齐） */
@@ -494,6 +509,8 @@ export interface SparkleKaraokeRenderCtx {
   /** 正在播放页是否展开；收起时应冻结渲染循环省资源 */
   expanded(): boolean;
   showTrans(): boolean;
+  /** 歌词辅助行模式：off=关闭 / translation=翻译 / romanization=注音（与翻译替换，无注音数据时回落翻译） */
+  lyricAux(): "off" | "translation" | "romanization";
   /** 跳转到指定位置（毫秒） */
   seek(ms: number): void;
   /** 订阅宿主 notify（约 4Hz + 播放态/展开收起等状态变化即发）；返回退订函数。
@@ -507,7 +524,7 @@ export interface SparkleKaraokeRenderCtx {
  */
 export interface SparkleKaraokeProvider {
   /** 解析逐字歌词；返回 null（或空行表）= 放弃，宿主回退普通 LRC 行级歌词 */
-  parse(content: string, translation: string): SparkleKaraokeLine[] | null;
+  parse(content: string, translation: string, romanization?: string): SparkleKaraokeLine[] | null;
   /** 接管逐字歌词容器（容器尺寸随宿主布局变化）；返回的函数在换曲/停用时调用 */
   render(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: SparkleKaraokeRenderCtx): (() => void) | void;
   /** 可选的总开关（如插件设置里的「逐字歌词」开关）：false 时宿主回退行级歌词；
