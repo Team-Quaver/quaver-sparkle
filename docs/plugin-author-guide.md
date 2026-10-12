@@ -43,10 +43,10 @@ export default definePlugin({
 | `registerView(path, view)` | 注册内容区路由（`#/my-page` 可达；视图签名同宿主视图，返回清理函数可选） | 删除路由；若正停在该页则跳回首页 |
 | `registerNav(item)` | 侧栏导航项（追加在内置项后） | 移除 DOM |
 | `registerSonglistGroup(group)` | 侧栏歌单区追加一组自定义列表，`items()` 每次重画时取最新 | 移除分组并重画侧栏 |
-| `registerSettingsSection(section)` | 设置页 Sparkle tab 的一组设置区 | 随面板销毁 |
+| `registerSettingsSection(section)` | 设置页「花火插件」标签的一组设置区 | 随面板销毁 |
 | `registerTheme(theme)` | 自定义主题：css 注入为 `html[data-sparkle-theme="<id>"]{…}` 变量组覆盖（未覆盖的变量回落亮/暗底色）。`theme.tint` 声明**高亮色**归谁管、`theme.background` 声明**背景**归谁管、`theme.menus` 声明**浮层菜单的外观**归谁管（三者缺省都是主题自带，见相关小节） | 删 style；若正激活该主题则回落默认；高亮色/背景/菜单外观策略同步重算 |
 | `registerStyleLayer(layer)` | 追加一张**全站样式层**（任意 CSS，不限变量覆盖）。`order` 决定层序，缺省 0；插件启用即生效，与主题包选择无关 | 摘掉这张 `<style>` |
-| `registerThemePack(pack)` | 注册主题包（一套可切换的完整风格，如 MD3 的亮/暗/高对比）。用户在 设置 → Sparkle → 主题 里切 | 停用插件即摘除；若正选中该包则自动回落默认外观 |
+| `registerThemePack(pack)` | 注册主题包（一套可切换的完整风格，如 MD3 的亮/暗/高对比）。用户在 设置 → 花火插件 → 主题 里切 | 停用插件即摘除；若正选中该包则自动回落默认外观 |
 | `registerNowPlayingWidget(w)` | 正在播放页歌词区下方的插件槽内挂部件 | 移除 DOM + 调 render 的清理函数 |
 | `registerNowPlayingView(v)` | **整页接管**正在播放页：宿主让出 `.np-inner`、隐藏原播放条与插件槽，插件自绘整页（封面流 / 歌词 / 播放控制）。`v.enabled()` 返回 false 时不接管；`render(host, ctx)` 的 ctx 见下 | 卸载插件视图、恢复默认布局、恢复播放条 |
 | `registerSongMenuItem(item|fn)` | 歌曲右键菜单追加项（可传函数按上下文动态生成） | 移除菜单项 |
@@ -85,7 +85,7 @@ ctx.registerNowPlayingView({
 | 页面 | `expanded()` / `gallery()` / `collapse()` |
 | 曲目 | `current()` / `prevSong()` / `nextSong()` / `songAt(offset)` / `queueLength()` |
 | 传输（只读） | `time()` / `duration()` / `paused()` / `loading()` / `error()` |
-| 歌词（只读） | `lyrics()` / `lyricState()` / `showTrans()` / `karaoke()` / `karaokeActive()` |
+| 歌词（只读） | `lyrics()` / `lyricState()` / `showTrans()` / `lyricAux()` / `karaoke()` / `karaokeActive()` |
 | 音量（只读） | `volume()` / `muted()` |
 | 音质（只读） | `quality()` / `qualityLabel()` / `lastStream()` / `qualityTiers()` |
 | 控制 | `toggle()` / `seek(sec)` / `next()` / `prev()` / `jumpTo(offset)` / `setVolume(v)` / `toggleMute()` / `switchQuality(id)` / `toggleTrans()` / `loved(mid)` / `toggleLove()` |
@@ -266,7 +266,7 @@ ctx.registerTheme({ id: "t2", name: "T2", css: `…`, menus: { mode: "host" } })
 `tint`、`background` 与 `menus` 各自独立声明：只声明其中一个，另两个仍然按
 「不声明 = 主题接管」算。
 
-已知取舍：sparkle 主题是独立覆盖层，不参与「跟随系统」的明暗切换；也不会写进
+已知取舍：花火面具是独立覆盖层，不参与「跟随系统」的明暗切换；也不会写进
 `Style.Style` 配置。未来并入外观选择器时会迁移。
 
 ## 全站样式层与主题包（换一套设计语言）
@@ -313,8 +313,8 @@ ctx.registerThemePack({
 });
 ```
 
-- **第一个 variant 是默认风格**（用户没切过时用它）。用户在 设置 → Sparkle → 主题 里
-  选；选中态持久化在 `localStorage`。
+- **第一个 variant 是默认风格**（用户没切过时用它）。用户在 设置 → 花火插件 → 主题 里
+  选；选中态持久化在 `quaver.sparkle.style.pack.v1` / `.variant.v1`。
 - `scheme` 声明亮底/暗底，宿主据此写 `html[data-sparkle-scheme]` → `color-scheme`，
   让滚动条、原生控件、表单元素跟着对（否则会出现「暗底页面 + 亮色滚动条」）。
   **不声明 = 尊重用户的「跟随系统」，宿主不动它。** 注意 `color-scheme` 只管原生控件，
@@ -329,7 +329,7 @@ ctx.registerThemePack({
 ### 逃生通道
 
 第三方样式能改宿主全部 UI —— 这是**设计意图**（主题就该全站生效），但也意味着一个
-坏主题能把界面搞得没法用。所以设置页 Sparkle → 主题 底部有「暂停全部插件样式」总闸：
+坏主题能把界面搞得没法用。所以设置页 花火插件 → 主题 底部有「暂停全部插件样式」总闸（`quaver.sparkle.style.suspended.v1`）：
 一个 localStorage 键，不经过任何插件，是唯一不依赖插件的退出路径。
 
 给插件作者的两条自律（宿主不审查，但这两条是社区约定）：
@@ -341,8 +341,8 @@ ctx.registerThemePack({
 
 1. 开发机设 `QUAVER_SPARKLE_DIR=/path/to/my-plugins`（主进程与 dev relay 同读）。
 2. 目录里放 `my-plugin/main.js`（ESM，default export 插件对象）与 `plugin.json`
-   （`{ id, name, version, main: "main.js" }`）。
-3. 打开设置页 Sparkle tab：列表应出现该插件 → 启用。改完 main.js 后「卸载→重装」
+   （`{ id, name, version, minHostVersion?, allowBeta?, author?, description?, category?, main: "main.js" }`）。
+3. 打开设置页「花火插件」标签：列表应出现该插件 → 启用。改完 main.js 后「卸载→重装」
    或直接重启应用（`?v=` 缓存破坏以安装时间戳为键）。
 
 ## 安全须知
@@ -350,3 +350,9 @@ ctx.registerThemePack({
 第三方插件在渲染层运行**任意 JS**（contextIsolation 开启、nodeIntegration 关闭，
 插件只能触达宿主暴露的桥）。只安装信任来源；宿主侧的 `hash` 字段仅防运输损坏，
 不构成签名校验。
+
+用户侧另有两个硬开关（判定都收敛到 `ui/src/sparkle/policy.ts` 的 `sparkBlockReason`，
+启动路径与运行期手动开关查同一份）：**安全模式**（`QUAVER_REDFLAG=1`，干净载入）
+只放行预装插件，第三方插件不读磁盘列表、代码一行不 import，运行期开关与安装入口
+一并上锁；**黑名单**（`quaver.conf` 的 `[Sparkle] Blacklist`，逗号分隔的插件 id）
+可拉黑任意插件，预装与第三方一视同仁。

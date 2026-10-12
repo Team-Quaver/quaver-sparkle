@@ -2,8 +2,8 @@
 //
 // marketplace/ 目录的最小范例：plugin.json 声明元数据（id 必须与目录名一致），
 // index.ts 是打包入口；CI（.github/workflows/marketplace.yml）把它打成单文件 ESM
-// 发布到 quaver.0w0.red，用户从 设置 → Sparkle → 主题 安装并启用。
-// 只注册一个 Sparkle 主题：深蓝夜空底 + 极光绿强调，未覆盖的变量跟随明暗两态。
+// 发布到 quaver.0w0.red，用户从 设置 → 花火插件 → 主题 安装并启用。
+// 只注册一个花火面具：深蓝夜空底 + 极光绿强调，未覆盖的变量跟随明暗两态。
 import { definePlugin } from "../../sdk/index";
 
 export default definePlugin({

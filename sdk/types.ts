@@ -56,7 +56,7 @@ export interface SparkleSonglistGroup {
   items(): SparkleSonglistItem[];
 }
 
-/** 设置页 Sparkle tab 里的一个设置分组 */
+/** 设置页「花火插件」面板里的一个设置分组 */
 export interface SparkleSettingsSection {
   id: string;
   title: string;
@@ -551,7 +551,7 @@ export interface SparkleContext {
   registerNav(item: SparkleNavItem): void;
   /** 注册侧栏歌单分组 */
   registerSonglistGroup(group: SparkleSonglistGroup): void;
-  /** 注册设置页 Sparkle tab 的设置分组 */
+  /** 注册设置页「花火插件」面板的设置分组 */
   registerSettingsSection(section: SparkleSettingsSection): void;
   /** 注册自定义主题（css = 一组 CSS 变量覆盖） */
   registerTheme(theme: SparkleTheme): void;

@@ -303,7 +303,7 @@ export default definePlugin({
   kind: "official",
   setup(ctx) {
     ctx.log.info("loaded");
-    // 逐字歌词总开关：插件设置区（Sparkle tab）里的卡片选项，持久化在插件 storage；
+    // 逐字歌词总开关：插件设置区（花火插件面板）里的卡片选项，持久化在插件 storage；
     // 宿主每次 notify 重读 enabled()，切换即时生效（最迟下一个播放事件/4Hz）
     const enabled = () => ctx.storage.get("wordbyword") !== "off";
     ctx.registerKaraokeProvider({

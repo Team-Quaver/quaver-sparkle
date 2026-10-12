@@ -1,6 +1,6 @@
 // Quaver Sparkle — 官方示例插件：Die For You
 //
-// 在设置页 Sparkle tab 展示一句《Die For You》（Grabbitz，VALORANT Champions 2022
+// 在设置页「花火插件」展示一句《Die For You》（Grabbitz，VALORANT Champions 2022
 // 主题曲）的随机歌词行，点击「换一句」随机切换。本插件同时是 SDK 用法示例：
 // 演示 registerSettingsSection 的最小集成与 dispose 的写法。
 import { definePlugin } from "@quaver/sparkle";
