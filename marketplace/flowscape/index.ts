@@ -73,6 +73,11 @@ const ANIM_MS = 440;
  *  与 CSS 的 .fs-covers.fs-quick（--fs-roll/.26s）同源。 */
 const ANIM_QUICK_MS = 260;
 
+/** 与宿主「翻译选项」同一组档位；SDK 不给 setter，所以 Flowscape 只能用 toggleTrans 循环到位。 */
+const AUX_MODES = ["off", "translation", "romanization"] as const;
+type AuxMode = (typeof AUX_MODES)[number];
+const AUX_LABEL: Record<AuxMode, string> = { off: "关闭", translation: "翻译", romanization: "音译" };
+
 // —— 图标（内联 SVG；全部 currentColor，跟随现用色） ——
 
 const svg = (d: string, extra = "") =>
@@ -504,14 +509,21 @@ const CSS = `
 .fs-mjump{ display:flex; flex-direction:column; gap:1px; }
 .fs-mjump:empty{ display:none; }
 .fs-msep{ height:1px; margin:5px 6px; background:#ffffff1a; }
-/* 更多选项里的「开关行」与「歌词大小行」 */
+/* 更多选项里的「翻译选项」「歌词大小行」 */
 .fs-mrow{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:7px 9px; border-radius:8px; font-size:12.5px; color:#ffffffe0; cursor:pointer; }
 .fs-mrow:hover{ background:#ffffff17; color:#fff; }
-.fs-mrow input{ position:absolute; opacity:0; pointer-events:none; }
-.fs-sw{ position:relative; flex:0 0 auto; width:30px; height:16px; border-radius:999px; background:#ffffff2e; transition:background .16s ease; }
-.fs-sw::after{ content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; transition:transform .16s ease; }
-.fs-mrow input:checked + .fs-sw{ background:color-mix(in srgb, var(--fs-acc) 55%, #0b0e19); }
-.fs-mrow input:checked + .fs-sw::after{ transform:translateX(14px); }
+/* 翻译选项三档：口径同宿主正在播放页；选中态用封面色掺深遮罩，保住任意封面下的白字对比。 */
+.fs-maux{ display:grid; gap:4px; padding:7px 9px; border-radius:8px; font-size:12.5px; color:#ffffffe0; }
+.fs-maux:hover{ background:#ffffff17; color:#fff; }
+#fs-maux{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:3px; }
+.fs-mopt{
+  border:0; border-radius:7px; padding:5px 6px; background:transparent; color:#fffb;
+  font:inherit; font-size:11.5px; text-align:center; cursor:pointer; white-space:nowrap;
+  transition:background .12s ease, color .12s ease;
+}
+.fs-mopt:hover{ background:#ffffff1f; color:#fff; }
+.fs-mopt.sel{ background:color-mix(in srgb, var(--fs-acc) 55%, #0b0e19); color:#fff; font-weight:600; }
+.fs-mopt:focus-visible{ outline:2px solid #ffffff80; outline-offset:1px; }
 .fs-msize{ display:flex; align-items:center; gap:2px; flex:0 0 auto; }
 .fs-msize button{
   width:22px; height:22px; border:0; border-radius:6px; padding:0; cursor:pointer;
@@ -623,7 +635,12 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
             <div class="fs-pop fs-mmenu" id="fs-mmenu" role="menu">
               <div id="fs-mjump"></div>
               <div class="fs-msep"></div>
-              <label class="fs-mrow" for="fs-mtrans"><span>翻译歌词</span><input type="checkbox" id="fs-mtrans"><span class="fs-sw" aria-hidden="true"></span></label>
+              <div class="fs-maux" role="radiogroup" aria-label="歌词翻译选项">
+                <span>翻译选项</span>
+                <div id="fs-maux">
+                  ${AUX_MODES.map((m) => `<button class="fs-mopt" type="button" role="radio" data-aux="${m}">${AUX_LABEL[m]}</button>`).join("")}
+                </div>
+              </div>
               <div class="fs-mrow">
                 <span>歌词大小</span>
                 <div class="fs-msize">
@@ -680,7 +697,8 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   const qBtn = $<HTMLButtonElement>("fs-qbtn"), qPop = $("fs-qpop");
   const collapseBtn = $<HTMLButtonElement>("fs-collapse");
   const moreBtn = $<HTMLButtonElement>("fs-more"), mMenu = $("fs-mmenu");
-  const mTrans = $<HTMLInputElement>("fs-mtrans");
+  const auxBox = $("fs-maux");
+  const auxBtns = [...auxBox.querySelectorAll<HTMLButtonElement>(".fs-mopt")];
   const lyVal = $("fs-ly-val"), lyDec = $<HTMLButtonElement>("fs-ly-dec"), lyInc = $<HTMLButtonElement>("fs-ly-inc");
   const mCollapse = $<HTMLButtonElement>("fs-mcollapse");
   const jumpBox = $("fs-mjump");
@@ -841,9 +859,15 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   collapseBtn.onclick = () => ctx.collapse();
   mCollapse.onclick = () => { closePops(); ctx.collapse(); };
 
-  // 更多选项：翻译开关 + 歌词字号（宿主 np 页那两样的对应物；路由类的
+  // 更多选项：翻译三档 + 歌词字号（宿主 np 页那两样的对应物；路由类的
   // 「同名搜索 / 跳转歌手」SDK 没开放，不做假按钮）
-  mTrans.onchange = () => ctx.toggleTrans();
+  // toggleTrans 是循环切换；点击目标档位时按当前档位算出最小步数（off → 翻译 → 音译）。
+  const setAux = (mode: AuxMode) => {
+    const from = AUX_MODES.indexOf(ctx.lyricAux());
+    const to = AUX_MODES.indexOf(mode);
+    for (let i = (to - from + AUX_MODES.length) % AUX_MODES.length; i > 0; i--) ctx.toggleTrans();
+  };
+  auxBtns.forEach((b) => { b.onclick = () => setAux(b.dataset.aux as AuxMode); });
   const applyLyScale = () => {
     host.style.setProperty("--fs-ly-scale", lyScale.toFixed(2));
     lyVal.textContent = `${Math.round(lyScale * 100)}%`;
@@ -1450,10 +1474,14 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
       loveBtn.title = loved ? "取消收藏" : "收藏这首歌";
     }
 
-    // 翻译开关：宿主 ⋮ 菜单改了，这里即时跟上（更多选项里的那份也得同步）
-    const tr = ctx.showTrans();
-    if (mTrans.checked !== tr) mTrans.checked = tr;
-    lyricsBox.classList.toggle("no-trans", !tr);
+    // 三档翻译选项：宿主 ⋮ 菜单改了，这里即时跟上（更多选项里的这份也得同步）
+    const aux = ctx.lyricAux();
+    for (const b of auxBtns) {
+      const sel = b.dataset.aux === aux;
+      b.classList.toggle("sel", sel);
+      b.setAttribute("aria-checked", String(sel));
+    }
+    lyricsBox.classList.toggle("no-trans", aux === "off");
   };
 
   /** 每帧层：只碰进度条与两个时间读数。签名比对让稳态几乎无写入。 */
