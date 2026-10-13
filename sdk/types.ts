@@ -533,16 +533,18 @@ export interface SparkleKaraokeRenderCtx {
 }
 
 /**
- * 逐字歌词提供器：解析（player 拉到原始歌词后先问 provider）+ 渲染（正在播放页
- * 的逐字歌词容器整体交给 provider）。停用插件时宿主移除 provider，自动回退行级歌词。
+ * 歌词提供器：解析（player 拉到原始歌词后先问 provider）+ 渲染（正在播放页的歌词
+ * 容器整体交给 provider）。逐字（QRC/TTML）与行级（LRC）都可交给它 —— 官方 amll 插件
+ * 两种都渲染，是宿主默认且不可停用的接管方。provider 缺席时宿主才走内置行级歌词 DOM。
  */
 export interface SparkleKaraokeProvider {
-  /** 解析逐字歌词；返回 null（或空行表）= 放弃，宿主回退普通 LRC 行级歌词 */
+  /** 解析歌词；返回 null（或空行表）= 放弃，宿主回退普通 LRC 行级歌词。
+   *  行级内容也要认：返回「每行一个覆盖整行的音节」即让宿主把 LRC 也交给本提供器渲染。 */
   parse(content: string, translation: string, romanization?: string): SparkleKaraokeLine[] | null;
-  /** 接管逐字歌词容器（容器尺寸随宿主布局变化）；返回的函数在换曲/停用时调用 */
+  /** 接管歌词容器（容器尺寸随宿主布局变化）；返回的函数在换曲/停用时调用 */
   render(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: SparkleKaraokeRenderCtx): (() => void) | void;
-  /** 可选的总开关（如插件设置里的「逐字歌词」开关）：false 时宿主回退行级歌词；
-   *  宿主在每次 notify 时重读，切换即时生效（最迟下一个播放事件/4Hz）。 */
+  /** 可选总开关：false 时宿主回退行级歌词；宿主每次 notify 重读，切换即时生效。
+   *  官方 amll 插件**不注册**它 —— AMLL 是唯一渲染器，没有「关掉」这一档，宿主摘不掉它。 */
   enabled?(): boolean;
 }
 
