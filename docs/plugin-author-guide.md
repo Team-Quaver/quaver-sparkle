@@ -107,6 +107,12 @@ ctx.registerNowPlayingView({
   收起时自停、重新展开靠 `onNotify` 唤醒（自停的 rAF 没人会替你重启）。
 - **`qualityTiers()` 初次可能为空**：档位表是异步拉的，就绪时宿主会主动多广播一次
   notify，不必自己轮询。
+- **本地/NAS 曲目是另一个播放世界**：快照带 `src: "local" | "nas"`（旧宿主没这
+  字段时可退 `mid.startsWith("local:")` 前缀约定）—— 没有在线档位阶梯：`qualityTiers()`
+  恒为空、`switchQuality()` 是空操作、`qualityLabel()` 恒为「本地文件 / NAS 流」；
+  也没有红心（`loved()` 恒 false、`toggleLove()` 空操作）。封面可能只存在于本地：优先用
+  快照的 `localCover`（同源相对路径），再按 `album.mid/pmid`（刮削命中的 QQ 侧信息）
+  回落 CDN。接管视图别摆一堆「点了没反应」的控件 —— 按 `src` 收掉或换成说明文案。
 - 接管期间**不要再自己画背景模糊**：宿主那两层还在，重复铺只会白烧一次解码。
 - **想画歌词就复用宿主已激活的提供器**：`karaoke()` 直接给出提供器解析好的行（毫秒时间轴），
   这些行是 `registerKaraokeProvider` 的插件（如内置 AMLL）解析的 —— 别自己重写 QRC/TTML/LRC 解析。

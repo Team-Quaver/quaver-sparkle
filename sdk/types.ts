@@ -334,7 +334,8 @@ export interface SparkleNpViewCtx {
   qualityLabel(): string;
   /** 最后实际应用的档位：被回退降档时 degraded=true */
   lastStream(): { tier: string; label: string; degraded: boolean } | null;
-  /** 可选档位（/stream/tiers 拉回；未就绪时为空数组，宿主在就绪时 notify 一次） */
+  /** 可选档位（/stream/tiers 拉回；未就绪时为空数组，宿主在就绪时 notify 一次；
+   *  本地/NAS 曲目恒为空数组 —— 文件本身就是那一档，没有阶梯可切） */
   qualityTiers(): SparkleQualityTier[];
 
   /** 订阅宿主 notify（约 4Hz + 播放态/展开收起等状态变化即发）；返回退订函数 */
@@ -354,7 +355,7 @@ export interface SparkleNpViewCtx {
   jumpTo(offset: number): void;
   setVolume(v: number): void;
   toggleMute(): void;
-  /** 切档（会话级，不持久化；高档不可及自动回退） */
+  /** 切档（会话级，不持久化；高档不可及自动回退；本地/NAS 曲目无档位，调用为空操作） */
   switchQuality(id: string): void;
   toggleTrans(): void;
   /** 该曲是否已收藏（本地红心） */
@@ -428,6 +429,19 @@ export interface SparkleSongSnapshot {
   album?: { name?: string; mid?: string; pmid?: string };
   /** 曲长（秒）；未知为 0 */
   interval?: number;
+  /**
+   * 曲目来源：省略 / "online" = QQ 曲库在线曲目；"local" = 本地音乐库文件；
+   * "nas" = WebDAV/NAS 串流。
+   *
+   * 本地/NAS 曲目是**另一个播放世界**：没有在线档位阶梯（音质即文件本身，
+   * qualityTiers() 恒为空、switchQuality 无效）、没有红心（QQ 侧概念，
+   * loved/toggleLove 无从谈起）、封面可能只存在于本地（见 localCover）。
+   * 接管视图据此收掉对应控件，别给用户点了没反应的按钮。
+   * （旧宿主不带这字段：判定可退回 mid 前缀约定 "local:"。）
+   */
+  src?: "online" | "local" | "nas";
+  /** 本地/NAS 曲目同源封面 URL（相对路径，自带防缓存 query）；无本地封面 = 空串，在线曲目 = 省略 */
+  localCover?: string;
 }
 
 /** 一档音质（id 形如 auto / 128 / 320 / flac / master …，与 /stream/tiers 对齐） */

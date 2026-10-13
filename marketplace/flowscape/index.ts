@@ -9,6 +9,12 @@
 // 隐藏原播放条（body.np-takeover），背景的模糊封面与压暗层继续铺着当底色。
 // 关掉本插件（或设置里关掉「流境模式」）即整块卸载、回到默认正在播放页。
 //
+// 本地播放适配：快照认出本地/NAS 曲目（src=local/nas；旧宿主没这字段时认
+// mid 前缀约定 "local:"）就换一套控件口径 —— 音质胶囊恒写「本地文件 / NAS 流」、
+// 浮窗只给一句说明零个档位按钮（文件本身就是那一档，没有在线阶梯可切），
+// 红心整颗收掉（QQ 侧概念），封面优先同源 localCover、再回落刮削命中的 CDN。
+// 别给用户留点了没反应的按钮。
+//
 // **接管必须自带出口**：播放条一收（点封面展开的唯一入口跟着没了）、.np-inner
 // 一让（⋮ 更多菜单在那儿），用户就被关在本页里只剩 ESC。所以本视图左上角
 // 常驻「收起」与「更多选项」两颗按钮 —— 这不是装饰，是接管态的必备件。
@@ -57,6 +63,9 @@ const coverSize = (want: number): number => {
 };
 
 const coverOf = (s: SparkleSongSnapshot | null, want: number): string => {
+  // 本地/NAS 曲目：优先**同源**本地封面（导入件/内嵌抽出件，服务端原图、不分尺寸档）；
+  // 没有本地封面再按刮削命中的 QQ 专辑信息回落 CDN，两头都空才吃占位符。
+  if (s?.localCover) return s.localCover;
   const pmid = s?.album?.pmid ?? "";
   const base = pmid ? pmid.split("_")[0] : (s?.album?.mid ?? "");
   if (!base) return "";
@@ -65,6 +74,16 @@ const coverOf = (s: SparkleSongSnapshot | null, want: number): string => {
 };
 
 const artistsOf = (s: SparkleSongSnapshot | null) => (s?.singer ?? []).map((x) => x.name).filter(Boolean).join(" / ");
+
+/**
+ * 本地/NAS 曲目判定。
+ *
+ * 首选快照的 src 字段（宿主明说 local/nas）；旧宿主没这字段时退回 mid 前缀约定
+ * —— 宿主把本地曲 mid 拼成 "local:<id>"，那是它与在线取链/档位/红心管线互斥的
+ * 公开口径（见宿主 lib/local:trackToSong）。两头都不认才当在线曲。
+ */
+const isLocalSong = (s: SparkleSongSnapshot | null): boolean =>
+  !!s && (s.src ? s.src !== "online" : s.mid.startsWith("local:"));
 
 /** 换槽动画时长（ms）。必须与 CSS 里 .fs-card / .fs-art 的 transform 过渡时长一致 ——
  *  短了会在半路清 data-to（卡片弹回原槽），长了会卡着不动。 */
@@ -318,6 +337,9 @@ const CSS = `
 }
 .fs-love:hover{ color:#fff; transform:translateY(-50%) scale(1.12); }
 .fs-love.on{ color:#ff5c72; }
+/* 本地/NAS 曲目整颗收掉（hidden 属性）：显式写死 display:none —— UA 那条 [hidden] 规则
+   会被任何 author 层的 button display 顶穿（宿主或哪天哪个主题补一刀就「藏不住」了）。 */
+.fs-love[hidden]{ display:none; }
 .fs-love svg{ width:15px; height:15px; }
 
 /* —— 歌词：单行 / 五行 两种版式（设置里「歌词行数」切换，默认单行）——
@@ -504,6 +526,8 @@ const CSS = `
 .fs-qi.sel{ background:color-mix(in srgb, var(--fs-acc) 30%, transparent); color:#fff; font-weight:700; }
 .fs-qi em{ font-style:normal; font-size:11px; color:#ffffff8f; }
 .fs-qempty{ padding:9px 10px; font-size:12px; color:#ffffff8f; }
+/* 本地/NAS 曲目的音质浮窗：一句说明、零个按钮（与宿主播放条的 .qp-note 同口径）。 */
+.fs-qnote{ padding:9px 10px; font-size:12px; line-height:1.55; color:#ffffffa6; max-width:236px; }
 /* 跳转三项（同名搜索 / 跳转歌手 / 跳转专辑）每次开菜单按当前曲现算，所以是动态填的；
    多歌手时逐项列出，缺 mid 的项禁用 —— 口径同宿主正在播放页的 ⋮ 菜单。 */
 .fs-mjump{ display:flex; flex-direction:column; gap:1px; }
@@ -1438,37 +1462,56 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     }
     volBox.setAttribute("aria-valuenow", String(Math.round(v * 100)));
 
-    // 音质：胶囊文案 + 浮窗条目（档位表异步到，签名变了才重建）
-    const ql = ctx.qualityLabel();
-    if (ql !== sigQLabel) { sigQLabel = ql; qBtn.textContent = ql; }
+    // 音质：胶囊文案 + 浮窗条目（档位表异步到，签名变了才重建）。
+    // **本地/NAS 曲目是另一个世界**：文件本身就是那一档，没有在线档位阶梯可切，
+    // switchQuality 对它是空操作 —— 胶囊直接写「本地文件 / NAS 流」（不借宿主
+    // qualityLabel，旧宿主可能还挂着上一首在线曲的档），浮窗只给一句说明、
+    // 一个按钮都不摆。口径与宿主播放条的音质浮窗逐字一致。
+    const local = isLocalSong(cur);
+    const ql = local ? (cur?.src === "nas" ? "NAS 流" : "本地文件") : ctx.qualityLabel();
+    if (ql !== sigQLabel) {
+      sigQLabel = ql;
+      qBtn.textContent = ql;
+      qBtn.title = local ? "音质：曲目来自本地库/NAS，文件本身就是那一档（无在线档位可切）" : "音质（本会话生效）";
+    }
     const tiers = ctx.qualityTiers();
     const curQ = ctx.quality();
-    const qKey = tiers.map((t2) => t2.id + (t2.locked ? "!" : "")).join(",") + "|" + curQ;
+    const qKey = (local ? "L|" : "") + tiers.map((t2) => t2.id + (t2.locked ? "!" : "")).join(",") + "|" + curQ;
     if (qKey !== sigQTiers) {
       sigQTiers = qKey;
       qPop.innerHTML = "";
-      const item = (id: string, label: string, note = "") => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "fs-qi" + (curQ === id ? " sel" : "");
-        b.innerHTML = `<span>${esc(label)}</span>${note ? `<em>${esc(note)}</em>` : ""}`;
-        b.onclick = () => { ctx.switchQuality(id); closePops(); };
-        qPop.append(b);
-      };
-      item("auto", "自动", "最高可播");
-      if (!tiers.length) {
-        const e2 = document.createElement("div");
-        e2.className = "fs-qempty";
-        e2.textContent = "档位读取中…";
-        qPop.append(e2);
-      } else for (const t2 of tiers) item(t2.id, t2.label, t2.locked ? "🔒 自动回退" : "");
+      if (local) {
+        const note = document.createElement("div");
+        note.className = "fs-qnote";
+        note.textContent = `${ql}：曲目来自本地库/NAS，无在线档位可切（音质即文件本身）`;
+        qPop.append(note);
+      } else {
+        const item = (id: string, label: string, note = "") => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "fs-qi" + (curQ === id ? " sel" : "");
+          b.innerHTML = `<span>${esc(label)}</span>${note ? `<em>${esc(note)}</em>` : ""}`;
+          b.onclick = () => { ctx.switchQuality(id); closePops(); };
+          qPop.append(b);
+        };
+        item("auto", "自动", "最高可播");
+        if (!tiers.length) {
+          const e2 = document.createElement("div");
+          e2.className = "fs-qempty";
+          e2.textContent = "档位读取中…";
+          qPop.append(e2);
+        } else for (const t2 of tiers) item(t2.id, t2.label, t2.locked ? "🔒 自动回退" : "");
+      }
     }
 
-    // 收藏：宿主本地红心是唯一真相源，逐次 notify 现读（loveVersion 会推 notify）
-    const loved = !!cur && ctx.loved(cur.mid);
-    const lk = `${cur?.mid ?? ""}|${loved ? 1 : 0}`;
+    // 收藏：宿主本地红心是唯一真相源，逐次 notify 现读（loveVersion 会推 notify）。
+    // 本地/NAS 曲目没有红心（那是 QQ 侧概念，toggleLove 无从下手）—— 整颗按钮收掉，
+    // 别摆一颗点了没反应的；歌曲列表行的同款收法见宿主 lib/songs。
+    const loved = !!cur && !local && ctx.loved(cur.mid);
+    const lk = `${cur?.mid ?? ""}|${loved ? 1 : 0}|${local ? 1 : 0}`;
     if (lk !== sigLove) {
       sigLove = lk;
+      loveBtn.hidden = local;
       loveBtn.classList.toggle("on", loved);
       loveBtn.innerHTML = loved ? ICON.heartFill : ICON.heart;
       loveBtn.title = loved ? "取消收藏" : "收藏这首歌";
@@ -1567,7 +1610,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 export default definePlugin({
   id: "flowscape",
   name: "Flowscape 流境",
-  version: "1.5.1",
+  version: "1.6.0",
   author: "Team Quaver",
   kind: "third-party",
   description: "一个复刻移动听歌史上最经典的播放页模式的插件",
