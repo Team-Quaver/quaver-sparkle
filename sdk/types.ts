@@ -226,11 +226,16 @@ export interface SparkleNpWidget {
   render(box: HTMLElement): (() => void) | void;
 }
 
-/** 一行歌词（行级；秒 + 文本 + 可选翻译） */
+/** 一行歌词（行级；秒 + 文本 + 可选辅助行） */
 export interface SparkleLyricLine {
   /** 行起始时间（秒） */
   t: number;
   text: string;
+  /**
+   * 辅助行（歌词下方那一行）。宿主已按「翻译选项」挑好：
+   * 翻译档 = 优先翻译、该行没翻译则回落音译；音译档 = 优先音译、没音译则回落翻译；
+   * 关闭档 = 空串。视图只管显示，不再自己判两路数据（逐字行见 karaoke()，那里是原始两路）。
+   */
   trans?: string;
 }
 
@@ -296,7 +301,11 @@ export interface SparkleNpViewCtx {
   /** 歌词状态：idle / loading / ok / none */
   lyricState(): "idle" | "loading" | "ok" | "none";
   showTrans(): boolean;
-  /** 歌词辅助行模式：off=关闭 / translation=翻译 / romanization=注音（与翻译替换，无注音数据时回落翻译） */
+  /**
+   * 歌词辅助行模式：off=关闭 / translation=翻译 / romanization=音译。
+   * 两档都是「优先自己那一路，本行缺数据就回落另一路」；辅助行永远只有一行。
+   * lyrics() 的 trans 已按此规则挑好；karaoke() 给的是原始两路，渲染方自己挑。
+   */
   lyricAux(): "off" | "translation" | "romanization";
   /**
    * 逐字歌词行（毫秒时间轴）。空数组 = 当前没有逐字数据。
@@ -471,9 +480,12 @@ export interface SparkleKaraokeWord {
   word: string;
   startTime: number;
   endTime: number;
-  /** 单词级音译（AMLL 的 romanWord） */
+  /** 单词级音译（AMLL 的 romanWord）；宿主不用 —— 音译是行级子行 */
   romanWord?: string;
-  /** 单词级注音（AMLL 的 Ruby） */
+  /**
+   * 单词级注音（AMLL 的 Ruby，词上方小字）。这是**日文振假名**那种逐词注音的位置；
+   * romaji/拼音属行级 romanLyric（翻译区域），官方 AMLL 插件不再挂 Ruby。
+   */
   ruby?: SparkleKaraokeRuby[];
 }
 
@@ -491,9 +503,9 @@ export interface SparkleKaraokeLine {
   startTime: number;
   /** 行结束时间（毫秒） */
   endTime: number;
-  /** 翻译歌词（宿主「翻译」选项关闭时由渲染方自行剔除） */
+  /** 翻译歌词（原始两路都留在数据里；上屏哪一路由 lyricAux() 决定，缺则回落另一路） */
   translatedLyric?: string;
-  /** 行级音译（宿主「音译」选项关闭时由渲染方自行剔除） */
+  /** 行级音译（romaji/拼音）：与翻译同一个位置 —— 歌词下方的辅助行 */
   romanLyric?: string;
   /** 背景人声行 */
   isBG?: boolean;
@@ -509,7 +521,9 @@ export interface SparkleKaraokeRenderCtx {
   /** 正在播放页是否展开；收起时应冻结渲染循环省资源 */
   expanded(): boolean;
   showTrans(): boolean;
-  /** 歌词辅助行模式：off=关闭 / translation=翻译 / romanization=注音（与翻译替换，无注音数据时回落翻译） */
+  /** 歌词辅助行模式：off=关闭 / translation=翻译 / romanization=音译。
+   *  渲染方自己按档位挑辅助行：优先所选那一路，本行缺数据则回落另一路，off 不显示
+   *  （官方 AMLL 插件的实现见 plugins/amll 的 pickAuxLine，规则与宿主行级视图一致）。 */
   lyricAux(): "off" | "translation" | "romanization";
   /** 跳转到指定位置（毫秒） */
   seek(ms: number): void;

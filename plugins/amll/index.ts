@@ -3,15 +3,16 @@
 // 用 @applemusic-like-lyrics/lyric 解析逐字歌词（QQ 音乐 QRC——含上游 qrc=1 返回的
 // XML 信封、纯文本 QRC、TTML），用 @applemusic-like-lyrics/core 的 DomLyricPlayer
 // 渲染正在播放页的逐字歌词。停用插件 = 宿主移除 provider，正在播放页自动回退行级歌词。
-// 上游 roma 字段是 QRC 词级音译（romaji/拼音）：按时间重叠挂成 AMLL word.ruby 注音；
-// 非 QRC 的行级音译回落到 romanLyric 行，纯文本音译能和 CJK 词数对上时也挂 Ruby。
+// 上游 roma 字段是音译（romaji/拼音，词级 QRC 与行级 LRC 都可能）：归一成行级 romanLyric，
+// 与翻译共用歌词**下方**的子行（Apple Music 的排版没有「词上方 romaji」）。两路各存一份，
+// 上屏的那一路由宿主「翻译选项」决定：翻译档优先翻译、音译档优先音译，本行缺则回落另一路。
 //
 // 上游 qrc=1 的 lyric 字段是 3DES+zlib 解密后的 QRC XML：
 //   <?xml …><QrcInfos>…<Lyric_1 Lyrics="[st,dur]词(st,dur)…&#10;…"/>…</QrcInfos>
 // AMLL 的 parseQrc 只认纯文本 QRC（行首 [st,dur]），所以 XML 信封要先抽 Lyrics 属性
 // 并解码 HTML 实体；QRC 本身不带翻译，翻译（普通 LRC）按行起始时间就近对齐。
 import { parseLrc, parseQrc, parseTTML, type LyricLine as AmlLyricLine } from "@applemusic-like-lyrics/lyric";
-import { LyricPlayer, type LyricLine as CoreLyricLine, type LyricWord as CoreLyricWord } from "@applemusic-like-lyrics/core";
+import { LyricPlayer, type LyricLine as CoreLyricLine } from "@applemusic-like-lyrics/core";
 import "@applemusic-like-lyrics/core/style.css";
 import { definePlugin, type SparkleKaraokeLine, type SparkleKaraokeRenderCtx } from "@quaver/sparkle";
 
@@ -45,12 +46,35 @@ function tryParseQrc(src: string): AmlLyricLine[] | null {
 const hasWordTiming = (lines: AmlLyricLine[]) =>
   lines.some((l) => l.words.some((w) => w.endTime > w.startTime));
 
-/** 辅助 LRC（翻译/音译）按行起始时间就近对齐（1.5s 容忍，同宿主 parseLrc 的口径） */
-function nearestLrcText(src: string, line: AmlLyricLine): string {
-  const text = (src ?? "").trim();
-  if (!text) return "";
-  let aux: AmlLyricLine[];
-  try { aux = parseLrc(text); } catch { return ""; }
+/** 辅助源（翻译 / 音译两路）：可能是普通 LRC，音译还可能是词级 QRC 或上游 qrc=1 的
+ *  XML 信封。取「整行文本」用不上词级时间轴，但必须先认得这些形状 —— 否则 parseLrc
+ *  读不懂 QRC/XML，音译档就永远是空的。 */
+const QRC_WORD_LINE = /^\[\d+,\d+\]/m; // 纯文本 QRC 的行首：[起始,时长]
+
+/** 逐字形态的辅助源（XML 信封 / 纯文本 QRC）；普通 LRC 返回 null，交回 parseLrc */
+function parseQrcAuxSource(src: string): AmlLyricLine[] | null {
+  const c = (src ?? "").trim();
+  if (!c) return null;
+  if (/<QrcInfos|<LyricInfo/i.test(c)) {
+    const payload = [...c.matchAll(/(?:Lyrics|LyricContent)\s*=\s*"([^"]*)"/g)]
+      .map((m) => decodeEntities(m[1]))
+      .join("\n");
+    return payload.trim() ? tryParseQrc(payload) : null;
+  }
+  return QRC_WORD_LINE.test(c) ? tryParseQrc(c) : null;
+}
+
+/** 辅助源 → 行列表：先按逐字解，解不出来退回行级 LRC；空源给空表 */
+function auxLines(src: string): AmlLyricLine[] {
+  const c = (src ?? "").trim();
+  if (!c) return [];
+  const q = parseQrcAuxSource(c);
+  if (q?.length) return q;
+  try { return parseLrc(c); } catch { return []; }
+}
+
+/** 按行起始时间就近取辅助文本（1.5s 容忍，同宿主 src/lyric.ts 的口径） */
+function nearestAuxText(aux: AmlLyricLine[], line: AmlLyricLine): string {
   let best: AmlLyricLine | undefined;
   let bd = 1500;
   for (const t of aux) {
@@ -60,99 +84,17 @@ function nearestLrcText(src: string, line: AmlLyricLine): string {
   return best ? best.words.map((w) => w.word).join("").trim() : "";
 }
 
-const CJK_RE = /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}/u;
-
-/** 把行级音译挂成 word.ruby：只做「数量能严格对上」的确定性对齐，避免瞎猜注音位置。
- *  QRC 的 CJK 词通常一字一词，此时一一对应；少数多字词按 CJK 字数消耗等量音译 token，
- *  合成该词的一条 Ruby（AMLL 会把整条注音居中挂在这个词上）。数量对不上则返回 false，
- *  调用方回落 romanLyric 行，宁可不注也不错注。 */
-function attachRuby(line: AmlLyricLine, roman: string): boolean {
-  const targets = line.words.filter((w) => CJK_RE.test(w.word));
-  if (!targets.length) return false;
-  const tokens = roman.trim().split(/\s+/).filter(Boolean);
-  const cjkCount = targets.reduce((n, w) => n + Array.from(w.word).filter((c) => CJK_RE.test(c)).length, 0);
-  if (!tokens.length || tokens.length !== cjkCount) return false;
-  let at = 0;
-  for (const word of targets) {
-    const chars = Array.from(word.word).filter((c) => CJK_RE.test(c));
-    if (!chars.length) continue;
-    const parts = tokens.slice(at, at + chars.length);
-    at += chars.length;
-    // lyric 包的公开 d.ts 暂未把 core 的 ruby 字段纳入 LyricWord；这里显式升到
-    // core 词型。TTML 实际也会带 ruby（core 渲染器消费），运行时结构是兼容的。
-    const rw = word as AmlLyricLine["words"][number] & Pick<CoreLyricWord, "ruby">;
-    rw.ruby = [{ word: parts.join(" "), startTime: word.startTime, endTime: word.endTime }];
-  }
-  return true;
-}
-
-function alignTranslation(lines: AmlLyricLine[], trans: string) {
+/** 翻译与音译都挂成**行级**辅助文本（translatedLyric / romanLyric），显示哪一路交给档位。
+ *  音译不挂词上 Ruby：romaji/拼音是「整行换一套读音」，Apple Music 的排版里它和翻译共用
+ *  歌词下方那一行子行（AMLL 的 lyricSubLine）；词上方的 Ruby 是日文振假名那种逐词注音，
+ *  语义不同，还要和逐字扫色抢版面。 */
+function alignAux(lines: AmlLyricLine[], translation: string, romanization: string) {
+  const tr = auxLines(translation);
+  const ro = auxLines(romanization);
+  if (!tr.length && !ro.length) return;
   for (const l of lines) {
-    const text = nearestLrcText(trans, l);
-    if (text) l.translatedLyric = text;
-  }
-}
-
-/** 从 QRC XML 信封或纯文本 QRC 里抽出词级音译行；非 QRC（普通 LRC）返回 null */
-function parseQrcRomanization(src: string): AmlLyricLine[] | null {
-  const c = (src ?? "").trim();
-  if (!c) return null;
-  if (/<QrcInfos|<LyricInfo/i.test(c)) {
-    const payload = [...c.matchAll(/(?:Lyrics|LyricContent)\s*=\s*"([^"]*)"/g)]
-      .map((m) => decodeEntities(m[1]))
-      .join("\n");
-    return payload.trim() ? tryParseQrc(payload) : null;
-  }
-  // 纯文本 QRC（行首 [st,dur]）直接喂 parseQrc；普通 LRC 会被 parseQrc 当作无词级行返回空
-  return tryParseQrc(c);
-}
-
-/** QRC 音译（romaji）→ 逐字 Ruby：按行起始时间就近配对，再按时间重叠把音译词挂到
- *  对应的 CJK 词上。QQ 的 roma QRC 是 romaji 词级时间轴，与原词一字一音节对应；
- *  非 CJK 词（拉丁字母/标点）不挂注音，避免「Ave」上再叠一个「Ave」。 */
-function attachQrcRomanization(lines: AmlLyricLine[], romaLines: AmlLyricLine[]) {
-  for (const line of lines) {
-    let best: AmlLyricLine | undefined;
-    let bd = 2000;
-    for (const r of romaLines) {
-      const d = Math.abs(r.startTime - line.startTime);
-      if (d < bd) { bd = d; best = r; }
-    }
-    if (!best) continue;
-    const rWords = best.words;
-    // 按音译词的起始时间归入「包含该时刻的原词」，比区间相交更准 ——
-    // 相交会把跨界的下一个音译词也算进前一个原词（こ→koso 的典型错位）
-    const targets = line.words.filter((w) => CJK_RE.test(w.word));
-    const partsOf = new Map<AmlLyricLine["words"][number], string[]>();
-    for (const rw of rWords) {
-      const t = rw.word.trim();
-      if (!t || !/[A-Za-z]/.test(t)) continue; // 跳过纯空格/标点
-      const mid = (rw.startTime + rw.endTime) / 2;
-      const host = targets.find((w) => mid >= w.startTime && mid < w.endTime);
-      if (!host) continue;
-      if (!partsOf.has(host)) partsOf.set(host, []);
-      partsOf.get(host)!.push(t);
-    }
-    let any = false;
-    for (const [w, parts] of partsOf) {
-      if (!parts.length) continue;
-      const rw = w as AmlLyricLine["words"][number] & Pick<CoreLyricWord, "ruby">;
-      rw.ruby = [{ word: parts.join(""), startTime: w.startTime, endTime: w.endTime }];
-      any = true;
-    }
-    // 挂不上词的就干脆不注（romanLyric 行在翻译行下方，和翻译叠着不好看；注音只走 Ruby 上方）
-  }
-}
-
-function alignRomanization(lines: AmlLyricLine[], roma: string) {
-  const rs = (roma ?? "").trim();
-  if (!rs) return;
-  // 音译只以 Ruby 注音形式出现在逐字词上方，不落 romanLyric 行（那在翻译下方，位置冲突）
-  const romaLines = parseQrcRomanization(rs);
-  if (romaLines && romaLines.length) { attachQrcRomanization(lines, romaLines); return; }
-  for (const l of lines) {
-    const text = nearestLrcText(rs, l);
-    if (text) attachRuby(l, text);
+    if (tr.length) { const t = nearestAuxText(tr, l); if (t) l.translatedLyric = t; }
+    if (ro.length) { const r = nearestAuxText(ro, l); if (r) l.romanLyric = r; }
   }
 }
 
@@ -180,30 +122,33 @@ function parseKaraoke(content: string, translation: string, romanization = ""): 
     lines = tryParseQrc(c);
   }
   if (!lines || !hasWordTiming(lines)) return null;
-  alignTranslation(lines, translation);
-  alignRomanization(lines, romanization);
+  alignAux(lines, translation, romanization);
   return lines;
 }
 
 // —— 渲染 ——
 
-/** SDK 逐字行 → core 渲染行（显式补齐 core 必填字段；翻译/注音替换关系在此落实）
- *  注音只走 word.ruby（挂在词上方），不用 romanLyric/romanWord —— 那俩在翻译下方/词下方，和翻译叠位。
- *  注音档有 Ruby 时只显示 Ruby、隐藏翻译；没 Ruby 数据时回落显示翻译。 */
-function toCoreLines(lines: SparkleKaraokeLine[], mode: "off" | "translation" | "romanization", hasRuby: boolean): CoreLyricLine[] {
-  const showRuby = mode === "romanization" && hasRuby;
-  const showTrans = mode === "translation" || (mode === "romanization" && !hasRuby);
+/** 辅助行取哪一路：翻译档优先翻译、音译档优先音译，本行缺哪一路就回落到另一路
+ *  （off = 不显示）。与宿主行级视图 src/lyric.ts 的 pickAux 同规则 —— 插件 import 不到宿主，
+ *  两边各自实现，改规则必须一起改。 */
+type AuxMode = "off" | "translation" | "romanization";
+
+function pickAuxLine(l: SparkleKaraokeLine, mode: AuxMode): string {
+  if (mode === "off") return "";
+  const prefer = (mode === "romanization" ? l.romanLyric : l.translatedLyric) ?? "";
+  const fallback = (mode === "romanization" ? l.translatedLyric : l.romanLyric) ?? "";
+  return prefer.trim() || fallback.trim();
+}
+
+/** SDK 逐字行 → core 渲染行（显式补齐 core 必填字段）。
+ *  辅助行只占**一格**：挑好的一路写进第一子行 translatedLyric，romanLyric 恒空。
+ *  AMLL 两个子行同样式、空则塌缩，固定用一格 → 切档时辅助行不上下跳，也不会两路同时上屏。 */
+function toCoreLines(lines: SparkleKaraokeLine[], mode: AuxMode): CoreLyricLine[] {
   return lines.map((l) => ({
-    words: l.words.map((w) => ({
-      word: w.word,
-      startTime: w.startTime,
-      endTime: w.endTime,
-      romanWord: "",
-      ruby: showRuby ? w.ruby?.map((r) => ({ word: r.word, startTime: r.startTime, endTime: r.endTime })) : undefined,
-    })),
+    words: l.words.map((w) => ({ word: w.word, startTime: w.startTime, endTime: w.endTime, romanWord: "" })),
     startTime: l.startTime,
     endTime: l.endTime,
-    translatedLyric: showTrans ? (l.translatedLyric ?? "") : "",
+    translatedLyric: pickAuxLine(l, mode),
     romanLyric: "",
     isBG: !!l.isBG,
     isDuet: !!l.isDuet,
@@ -213,9 +158,6 @@ function toCoreLines(lines: SparkleKaraokeLine[], mode: "off" | "translation" | 
 /** 接管逐字歌词容器：DomLyricPlayer + 自驱 rAF 时钟。
  *  宿主 notify 只有 4Hz，逐字扫色要逐帧时间；播放态/翻译开关/展开收起每帧轮询
  *  ctx 闭包（读到的永远是当前态），收起时停表冻结、展开即恢复。 */
-/** 这批逐字行里有没有任何 Ruby 注音（决定注音档是挂 Ruby 还是回落翻译） */
-const hasRuby = (lines: SparkleKaraokeLine[]) => lines.some((l) => l.words.some((w) => w.ruby?.length));
-
 function renderAmll(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: SparkleKaraokeRenderCtx): () => void {
   const player = new LyricPlayer();
   const el = player.getElement();
@@ -226,9 +168,8 @@ function renderAmll(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: Sparkle
   player.setEnableBlur(true);   // 非当前行距离模糊，对齐行级视图的模糊语言
   player.setEnableScale(true);
 
-  const ruby = hasRuby(lines);
   let shownMode = ctx.lyricAux();
-  player.setLyricLines(toCoreLines(lines, shownMode, ruby), ctx.time());
+  player.setLyricLines(toCoreLines(lines, shownMode), ctx.time());
 
   // —— 时钟去抖 ——
   // 引擎传输的 position 是外推时钟（~4Hz 快照重同步），重同步瞬间可能回跳几十毫秒；
@@ -267,9 +208,9 @@ function renderAmll(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: Sparkle
     const dt = lastFrame ? Math.min(now - lastFrame, 50) : 16.7;    // 帧增量钳制（标签页切回等）
     lastFrame = now;
     const wantMode = ctx.lyricAux();
-    if (wantMode !== shownMode) {                                    // 翻译/注音选项变化：重建行表
+    if (wantMode !== shownMode) {                                    // 翻译/音译选项变化：重建行表
       shownMode = wantMode;
-      player.setLyricLines(toCoreLines(lines, shownMode, ruby), feedTime());
+      player.setLyricLines(toCoreLines(lines, shownMode), feedTime());
     }
     applyPlayState();
     player.setCurrentTime(feedTime());
@@ -297,9 +238,9 @@ function renderAmll(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: Sparkle
 export default definePlugin({
   id: "amll",
   name: "Apple Music-like Lyrics",
-  version: "1.1.0",
+  version: "1.2.0",
   author: "quaver",
-  description: "用 AMLL（applemusic-like-lyrics）渲染逐字歌词（QRC/TTML，含 Ruby 注音）；停用后回到行级歌词",
+  description: "用 AMLL（applemusic-like-lyrics）渲染逐字歌词（QRC/TTML，翻译/音译共用行级子行）；停用后回到行级歌词",
   kind: "official",
   setup(ctx) {
     ctx.log.info("loaded");

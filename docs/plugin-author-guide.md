@@ -53,7 +53,7 @@ export default definePlugin({
 | `registerPlaylistMenuItem(item|fn)` | 侧栏（主菜单栏）歌单右键菜单追加项：fn 收到 `{id,title,kind,songnum}`，`kind` 是 `created` / `fav` / `virtual`（每日 30 首、我喜欢），可据此给出不同项 | 移除菜单项 |
 | `registerNowPlayingMenuItem(item|fn)` | 正在播放页「更多操作」（⋮）菜单的追加项：fn 收到 `{song}`（没在播时为 `null`）。这个面是**扁平列表**，只有 `label` / `disabled` / `run` / `danger` / `note`（作 title）生效，`sub` 与缩略图不渲染 | 移除菜单项 |
 | `registerStreamSource(src)` | 备用播放源链的一环：`resolve(song, quality)` 返回 `{url,...}` 即采用，`null` 放行下一环；全链落空走官方 `/stream/resolve` | 移出源链 |
-| `registerKaraokeProvider(p)` | 逐字歌词提供器：`parse(content, translation, romanization)` 返回词级时间轴行（`null` = 放弃，宿主回退行级 LRC；音译可落在 `romanLyric` / `romanWord` / `ruby`）；`render(host, lines, ctx)` 接管正在播放页逐字歌词容器（`ctx` 为时间/播放态/翻译与音译开关/seek 的只读闭包） | 移除 provider；正在播放页自动回退行级歌词 |
+| `registerKaraokeProvider(p)` | 逐字歌词提供器：`parse(content, translation, romanization)` 返回词级时间轴行（`null` = 放弃，宿主回退行级 LRC；音译落在行级 `romanLyric`（与翻译共用歌词下方的辅助行，`ruby` 只留给日文振假名那种词上方注音））；`render(host, lines, ctx)` 接管正在播放页逐字歌词容器（`ctx` 为时间/播放态/翻译与音译开关/seek 的只读闭包） | 移除 provider；正在播放页自动回退行级歌词 |
 
 注意：插件源抛错会被宿主吞掉并 warn（不阻塞播放）；菜单项结构与宿主 MenuItem 同型
 （`label/note/thumb/round/danger/disabled/sub?/run?`）。

@@ -958,6 +958,16 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   const transHtml = (l: DispLine) =>
     l.trans && ctx.showTrans() ? `<span class="t2">${esc(l.trans)}</span>` : "";
 
+  /** 逐字行的辅助行取哪一路：优先所选那一路，本行缺数据则回落另一路（off = 空）。
+   *  规则与宿主行级视图同源 —— ctx.lyrics() 的 trans 宿主已按档位挑好，这里只处理
+   *  karaoke() 交出来的原始两路（translatedLyric / romanLyric）。 */
+  const auxText = (l: { translatedLyric?: string; romanLyric?: string }, mode: string) => {
+    if (mode === "off") return "";
+    const prefer = ((mode === "romanization" ? l.romanLyric : l.translatedLyric) ?? "").trim();
+    const fallback = ((mode === "romanization" ? l.translatedLyric : l.romanLyric) ?? "").trim();
+    return prefer || fallback;
+  };
+
   /** 把一条歌词铺进元素；asWords=true 且有词级数据时走逐词 span（返回词元素表）。
    *  词的文本只通过 textContent 写一次（不拼 HTML，免转义），CSS 在原字形内扫色。 */
   const renderLine = (el: HTMLElement, l: DispLine, asWords: boolean): HTMLElement[] => {
@@ -1001,8 +1011,10 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     const st = ctx.lyricState();
     const kara = ctx.karaokeActive();
     const mode: 1 | 5 = store?.get("lyrows") === "5" ? 5 : 1;
-    // 曲/状态/翻译/逐字/行数 都进签名：任一改动就整体重建（否则容器里还挂着上一种版式的 DOM）
-    const key = `${cur?.mid ?? ""}|${st}|${ctx.showTrans() ? 1 : 0}|${kara ? "k" : "l"}|${mode}`;
+    // 曲/状态/辅助行档位/逐字/行数 都进签名：任一改动就整体重建（否则容器里还挂着上一种版式的 DOM）。
+    // 档位取 lyricAux() 而不是 showTrans()：翻译⇄音译之间切换时 showTrans 一直是真，
+    // 但每行的辅助行文本换了一路，不重造就留着上一档的字。
+    const key = `${cur?.mid ?? ""}|${st}|${ctx.lyricAux()}|${kara ? "k" : "l"}|${mode}`;
     if (key === lastLyricKey) return;
     lastLyricKey = key;
     lyricMode = mode;
@@ -1030,7 +1042,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     if (!count) { lyricsRoll.innerHTML = `<div class="fs-ly-empty">暂无歌词</div>`; return; }
     // 折成同一种模型（时间统一秒；逐字额外保留毫秒词表）
     dispLines = kara
-      ? karaLines.map((l) => ({ t: l.startTime / 1000, text: l.words.map((w) => w.word).join(""), trans: l.translatedLyric, words: l.words }))
+      ? karaLines.map((l) => ({ t: l.startTime / 1000, text: l.words.map((w) => w.word).join(""), trans: auxText(l, ctx.lyricAux()), words: l.words }))
       : lyricLines.map((l) => ({ t: l.t, text: l.text, trans: l.trans }));
     if (mode === 5) {
       // 整列一次建好（几十到几百个纯文本 div，开销可控）；rAF 只切 .cur 与逐字
