@@ -47,7 +47,7 @@ export default definePlugin({
 | `registerNav(item)` | 侧栏导航项（追加在内置项后） | 移除 DOM |
 | `registerSonglistGroup(group)` | 侧栏歌单区追加一组自定义列表，`items()` 每次重画时取最新 | 移除分组并重画侧栏 |
 | `registerSettingsSection(section)` | 设置页「花火插件」标签的一组设置区 | 随面板销毁 |
-| `registerTheme(theme)` | 自定义主题：css 注入为 `html[data-sparkle-theme="<id>"]{…}` 变量组覆盖（未覆盖的变量回落亮/暗底色）。`theme.tint` 声明**高亮色**归谁管、`theme.background` 声明**背景**归谁管、`theme.menus` 声明**浮层菜单的外观**归谁管（三者缺省都是主题自带，见相关小节） | 删 style；若正激活该主题则回落默认；高亮色/背景/菜单外观策略同步重算 |
+| `registerTheme(theme)` | 自定义主题：css 注入为 `html[data-sparkle-theme="<id>"]{…}` 变量组覆盖（未覆盖的变量回落亮/暗底色）。`theme.tint` 声明**高亮色**归谁管、`theme.background` 声明**背景**归谁管、`theme.menus` 声明**浮层菜单的外观**归谁管、`theme.controlBar` 声明**播放控制条停靠形态**归谁管（前三者缺省都是主题自带；控制条缺省归宿主偏好，见相关小节） | 删 style；若正激活该主题则回落默认；高亮色/背景/菜单外观策略同步重算 |
 | `registerStyleLayer(layer)` | 追加一张**全站样式层**（任意 CSS，不限变量覆盖）。`order` 决定层序，缺省 0；插件启用即生效，与主题包选择无关 | 摘掉这张 `<style>` |
 | `registerThemePack(pack)` | 注册主题包（一套可切换的完整风格，如 MD3 的亮/暗/高对比）。用户在 设置 → 花火插件 → 主题 里切 | 停用插件即摘除；若正选中该包则自动回落默认外观 |
 | `registerNowPlayingWidget(w)` | 正在播放页歌词区下方的插件槽内挂部件 | 移除 DOM + 调 render 的清理函数 |
@@ -312,6 +312,23 @@ ctx.registerStyleLayer({
   闭包已绑好，插件不用自己管）。
 - 想按当前主题风格调整自己的行为（比如高对比风格下换强调色），用 `ctx.style.state()`
   + `ctx.style.onChange(cb)` 订阅，别去解析 CSS。
+
+### 播放控制条停靠形态
+
+`registerTheme` 可以接管设置页「外观 → 播放控制条」的停靠形态：
+
+```ts
+ctx.registerTheme({
+  id: "compact-player",
+  name: "Compact Player",
+  css: `body { --control-bar-width: min(560px, calc(100vw - 360px)); }`,
+  controlBar: { mode: "floating" },
+});
+```
+
+- 缺省 `controlBar` = 宿主偏好照常生效；主题仍可用 CSS 重画。
+- `mode: "floating"` / `"bottom"` 是最终态；用户设置页的对应卡片禁用并注明由主题接管。
+- `mode: "host"` = 把控制权还给宿主偏好。切换主题 / 停用插件时宿主会重算。
 
 ### 主题包（一套可切换的完整风格）
 

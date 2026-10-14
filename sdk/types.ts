@@ -137,6 +137,19 @@ export interface SparkleThemeMenus {
   mode: "host";
 }
 
+/**
+ * 主题对「播放控制条停靠形态」（设置→外观→播放控制条）的态度。
+ *
+ * **不声明**（`theme.controlBar` 缺省）= 宿主偏好照常生效；主题仍然可以用自己的 CSS
+ * 覆盖 `--control-bar-*` 与 `body[data-control-bar]` 的形态。
+ *
+ * 声明了 = 主题接管停靠形态：`bottom` / `floating` 是最终态，用户设置页对应分组禁用；
+ * `mode: "host"` 表示把停靠权还给宿主偏好。
+ */
+export interface SparkleThemeControlBar {
+  mode: "host" | "bottom" | "floating";
+}
+
 /** 自定义主题：css 是一组 CSS 变量覆盖，作用于 html[data-sparkle-theme="<id>"] */
 export interface SparkleTheme {
   id: string;
@@ -148,6 +161,8 @@ export interface SparkleTheme {
   background?: SparkleThemeBackground;
   /** 浮层菜单的外观归谁管，见 SparkleThemeMenus。**缺省 = 主题接管**。 */
   menus?: SparkleThemeMenus;
+  /** 播放控制条的停靠形态归谁管，见 SparkleThemeControlBar。**缺省 = 宿主接管**。 */
+  controlBar?: SparkleThemeControlBar;
 }
 
 // —— 样式层 / 主题包 ——

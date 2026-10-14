@@ -428,8 +428,10 @@ export default definePlugin({
       // Tint 交给主题自带方案：用户在设置页挑（第一个是默认）。
       // 这就是本插件的「Tint 设置」入口 —— 换方案 = 换源色 = 整套 M3 角色重算。
       tint: { mode: "presets", presets: TINT_PRESETS },
+      controlBar: { mode: "bottom" },
       // background / menus 都不声明 = 主题接管：
       // 背景走纯 M3 surface（不铺封面环境色），菜单走 M3 elevation 面板（不透玻璃）。
+      // Lumen 的播放条是满幅 bottom app bar，所以控制条停靠形态也由主题接管为 bottom。
     });
 
     ctx.registerSettingsSection({
