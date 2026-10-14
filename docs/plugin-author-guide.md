@@ -56,7 +56,7 @@ export default definePlugin({
 | `registerPlaylistMenuItem(item|fn)` | 侧栏（主菜单栏）歌单右键菜单追加项：fn 收到 `{id,title,kind,songnum}`，`kind` 是 `created` / `fav` / `virtual`（每日 30 首、我喜欢），可据此给出不同项 | 移除菜单项 |
 | `registerNowPlayingMenuItem(item|fn)` | 正在播放页「更多操作」（⋮）菜单的追加项：fn 收到 `{song}`（没在播时为 `null`）。这个面是**扁平列表**，只有 `label` / `disabled` / `run` / `danger` / `note`（作 title）生效，`sub` 与缩略图不渲染 | 移除菜单项 |
 | `registerStreamSource(src)` | 备用播放源链的一环：`resolve(song, quality)` 返回 `{url,...}` 即采用，`null` 放行下一环；全链落空走官方 `/stream/resolve` | 移出源链 |
-| `registerKaraokeProvider(p)` | 歌词提供器：`parse(content, translation, romanization)` 返回行 —— 逐字（QRC/TTML 的词级时间轴）与行级（普通 LRC 的「整行一个音节」）都要认；`null` = 放弃，宿主回退内置行级歌词 DOM（音译落在行级 `romanLyric`，与翻译共用歌词下方的辅助行；`ruby` 是**词上方**的日文振假名，由内置引擎从 QRC `[kana:]` 标签解出，与音译两回事）。`render(host, lines, ctx)` 接管正在播放页歌词容器（`ctx` 为时间/播放态/翻译与音译开关/seek 的只读闭包）；可选 `enabled()` 总开关，返回 false 即回退行级。**注册即顶掉宿主内置的 AMLL**（先注册先得），停用后自动回落内置 | 移除 provider；正在播放页回落内置 AMLL |
+| `registerKaraokeProvider(p)` | 歌词提供器：`parse(content, translation, romanization)` 返回行 —— 逐字（QRC/TTML 的词级时间轴）与行级（普通 LRC 的「整行一个音节」）都要认；`null` = 放弃，宿主回退内置行级歌词 DOM（音译落在行级 `romanLyric`，与翻译共用歌词下方的辅助行；`ruby` 是**词上方**的日文振假名，由内置引擎从 QRC `[kana:]` 标签解出，与音译两回事）。`render(host, lines, ctx)` 接管正在播放页歌词容器（`ctx` 为时间/播放态/翻译与音译开关/歌词延迟/seek 的只读闭包）；可选 `enabled()` 总开关，返回 false 即回退行级。**注册即顶掉宿主内置的 AMLL**（先注册先得），停用后自动回落内置 | 移除 provider；正在播放页回落内置 AMLL |
 
 注意：插件源抛错会被宿主吞掉并 warn（不阻塞播放）；菜单项结构与宿主 MenuItem 同型
 （`label/note/thumb/round/danger/disabled/sub?/run?`）。
@@ -88,7 +88,7 @@ ctx.registerNowPlayingView({
 | 页面 | `expanded()` / `gallery()` / `collapse()` |
 | 曲目 | `current()` / `prevSong()` / `nextSong()` / `songAt(offset)` / `queueLength()` |
 | 传输（只读） | `time()` / `duration()` / `paused()` / `loading()` / `error()` |
-| 歌词（只读） | `lyrics()` / `lyricState()` / `showTrans()` / `lyricAux()` / `karaoke()` / `karaokeActive()` |
+| 歌词（只读） | `lyrics()` / `lyricState()` / `showTrans()` / `lyricAux()` / `lyricDelay()` / `karaoke()` / `karaokeActive()` |
 | 音量（只读） | `volume()` / `muted()` |
 | 音质（只读） | `quality()` / `qualityLabel()` / `lastStream()` / `qualityTiers()` |
 | 控制 | `toggle()` / `seek(sec)` / `next()` / `prev()` / `jumpTo(offset)` / `setVolume(v)` / `toggleMute()` / `switchQuality(id)` / `toggleTrans()` / `loved(mid)` / `toggleLove()` |
@@ -123,6 +123,12 @@ ctx.registerNowPlayingView({
   的插件提供器关掉时为 false 但 `karaoke()` 可能还留着上次的结果。false 时务必回退 `lyrics()` 行级，
   否则你的提供器被关掉后页面还在逐字跳（内置 AMLL 不注册开关，所以它恒算「在位」）。
   逐词高亮的时钟用自己的 rAF（notify 只有 4Hz）。
+- **歌词延迟要跟着吃**：`lyricDelay?()` 给当前曲的用户微调（毫秒，正 = 歌词更晚出现；按歌曲
+  存宿主 localStorage，正在播放页 ⋮ 菜单调）。`time()` 不含它 —— 选当前行的时钟自己扣
+  `time() − lyricDelay()/1000`，点击行 seek 再加回真实播放位（`seek(行秒 + lyricDelay()/1000)`）。
+  逐字提供器 ctx 同口径（`SparkleKaraokeRenderCtx.lyricDelay`，宿主内置 AMLL 就是这么做的）。
+  不实现它 = 用户的调音在你的视图/渲染器上凭空失效。旧宿主没这方法：读取一律
+  `ctx.lyricDelay?.() ?? 0`，缺省按 0（不调整）处理。
 - **要「跳转歌手/专辑/搜索」直接写 hash 路由**（`location.hash = "#/singer?mid=…&name=…"`、
   `#/album?mid=…&name=…`、`#/search?keyword=…`），歌手/专辑的 mid 在曲目快照里。
   但记住：**正在播放页是铺满全窗的常驻悬浮层，只换路由它仍盖在最上面** —— 跳转前先

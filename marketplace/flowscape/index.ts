@@ -1099,7 +1099,8 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
       ).join("");
       lineEls = [...lyricsRoll.querySelectorAll<HTMLElement>(".fs-ll")];
       for (const el of lineEls) {
-        el.onclick = () => { browsing = false; window.clearTimeout(browseTimer); ctx.seek(dispLines[Number(el.dataset.i)].t); };
+        // 行时间是「歌词时间轴」，延迟把它挪过：点击落要点回真实播放位（行秒 + 延迟秒）
+        el.onclick = () => { browsing = false; window.clearTimeout(browseTimer); ctx.seek(Math.max(0, dispLines[Number(el.dataset.i)].t + (ctx.lyricDelay?.() ?? 0) / 1000)); };
       }
     }
     // 单行版式先留空：rAF 首次 tick 会把当前句填进来
@@ -1118,7 +1119,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     el.className = "fs-ll cur";
     el.title = "点击跳到这一句";
     karaWords = renderLine(el, l, karaOn);
-    el.onclick = () => ctx.seek(l.t);
+    el.onclick = () => ctx.seek(Math.max(0, l.t + (ctx.lyricDelay?.() ?? 0) / 1000));
     lyricsRoll.append(el);
     fitOne(el);
   };
@@ -1559,9 +1560,10 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     if (!ctx.expanded() || !host.isConnected) { running = false; return; }
     // 当前句：逐帧只做「行号比对」，变了才重填 / 切高亮（五行版式的跟随居中只在换句时做，
     // 每帧写 scrollTop 会把平滑滚动反复重启，永远滚不到位）。
-    // +0.2s 与宿主行级高亮同一处时间补偿。
+    // +0.2s 与宿主行级高亮同一处时间补偿；再扣掉用户按曲调的歌词延迟（ctx.lyricDelay，
+    // 毫秒、正 = 歌词延后）—— 口径与宿主内置 AMLL / 行级视图一致，用户在 ⋮ 菜单调的同步这里也生效。
     if (dispLines.length) {
-      const sec = ctx.time() + 0.2;
+      const sec = ctx.time() + 0.2 - (ctx.lyricDelay?.() ?? 0) / 1000;
       let idx = -1;
       for (let i = 0; i < dispLines.length; i++) { if (dispLines[i].t <= sec) idx = i; else break; }
       if (idx !== lastIdx) {

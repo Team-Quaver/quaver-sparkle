@@ -288,7 +288,7 @@ export interface SparkleNpViewCtx {
   queueLength(): number;
 
   // —— 传输（只读） ——
-  /** 当前播放位置（秒） */
+  /** 当前播放位置（秒，裸播放头；不含歌词延迟，见 lyricDelay()） */
   time(): number;
   /** 当前流时长（秒）；未知为 0 */
   duration(): number;
@@ -307,6 +307,13 @@ export interface SparkleNpViewCtx {
    * lyrics() 的 trans 已按此规则挑好；karaoke() 给的是原始两路，渲染方自己挑。
    */
   lyricAux(): "off" | "translation" | "romanization";
+  /**
+   * 用户为当前歌曲设置的「歌词延迟」（毫秒；正数 = 歌词更晚出现）。按歌曲存宿主 localStorage。
+   *  time() 不含它：视图选「当前行」用 `time() − lyricDelay()/1000`，点击行 seek 时加回
+   *  （`seek(行秒 + lyricDelay()/1000)`）—— 与宿主内置引擎/行级视图同一口径。
+   *  旧宿主没有这个方法：读取一律走 `ctx.lyricDelay?.() ?? 0`（缺省 = 不调整）。
+   */
+  lyricDelay?(): number;
   /**
    * 逐字歌词行（毫秒时间轴）。空数组 = 当前没有逐字数据。
    *
@@ -533,8 +540,15 @@ export interface SparkleKaraokeLine {
 
 /** 渲染期间宿主提供的实时状态只读视图（闭包取值，读到的永远是当前态） */
 export interface SparkleKaraokeRenderCtx {
-  /** 当前播放位置（毫秒，已含宿主的时间补偿） */
+  /** 当前播放位置（毫秒，已含宿主的固定时间补偿；**不含**用户调的歌词延迟 —— 那是 lyricDelay()） */
   time(): number;
+  /** 用户为当前歌曲设置的「歌词延迟」（毫秒；**正数 = 歌词更晚出现**，负数 = 提前）。
+   *  按歌曲持久化在宿主 localStorage，每次取值都是当前播放曲的当前档位（菜单改完下一帧就是新值）。
+   *  时钟由渲染方自己扣：驱动动画用 `time() − lyricDelay()`；「点击歌词行跳转」再把延迟加回真实
+   *  播放位（`seek(行起始 + lyricDelay())`），点哪行屏幕才停在哪行。宿主内置 AMLL 与行级兜底
+   *  视图都按这套口径执行 —— 覆盖内置的提供器照做，用户调的延迟才不会在你的渲染器上凭空失效。
+   *  旧宿主没有这个方法：读取一律走 `ctx.lyricDelay?.() ?? 0`（缺省 = 不调整）。 */
+  lyricDelay?(): number;
   paused(): boolean;
   /** 正在播放页是否展开；收起时应冻结渲染循环省资源 */
   expanded(): boolean;
@@ -543,7 +557,7 @@ export interface SparkleKaraokeRenderCtx {
    *  渲染方自己按档位挑辅助行：优先所选那一路，本行缺数据则回落另一路，off 不显示
    *  （宿主内置 AMLL 与宿主行级视图共用 src/lyric.ts:pickAux 那一份实现）。 */
   lyricAux(): "off" | "translation" | "romanization";
-  /** 跳转到指定位置（毫秒） */
+  /** 跳转到指定位置（毫秒，**真实播放位**，不是歌词时钟 —— 见 lyricDelay() 的换算口径） */
   seek(ms: number): void;
   /** 订阅宿主 notify（约 4Hz + 播放态/展开收起等状态变化即发）；返回退订函数。
    *  渲染循环据此在页面重新展开时唤醒自己（收起时自停的 rAF 没有人会替你重启）。 */
