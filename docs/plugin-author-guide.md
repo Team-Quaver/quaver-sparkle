@@ -35,8 +35,9 @@ export default definePlugin({
   再调用 setup 返回的 dispose。
 - **启用集合**持久化在 `localStorage["quaver.sparkle.enabled.v1"]`（string[]）。
 - 官方插件默认启用；第三方插件安装后默认**关闭**，需手动启用。
-- 少数官方插件标记为**内置必装**（宿主 `OFFICIAL_META` 里的 `required: true`，目前是 AMLL 歌词渲染器）：
-  宿主启动时强制启用、`disable` 被中央闸口拒绝、设置页开关锁死，用户停不掉（连老的 `official-off` 标记也一并无视）。
+- **歌词渲染不在插件体系里**：AMLL 已从「内置必装的官方插件」改成宿主内置功能
+  （`ui/src/lyrics/`），没有开关、也不出现在设置页的插件列表。它作为**兜底提供器**住在
+  注册表里，排在所有插件提供器之后 —— 你 `registerKaraokeProvider` 就顶掉它，停用即回落它。
 
 ## 扩展点
 
@@ -55,7 +56,7 @@ export default definePlugin({
 | `registerPlaylistMenuItem(item|fn)` | 侧栏（主菜单栏）歌单右键菜单追加项：fn 收到 `{id,title,kind,songnum}`，`kind` 是 `created` / `fav` / `virtual`（每日 30 首、我喜欢），可据此给出不同项 | 移除菜单项 |
 | `registerNowPlayingMenuItem(item|fn)` | 正在播放页「更多操作」（⋮）菜单的追加项：fn 收到 `{song}`（没在播时为 `null`）。这个面是**扁平列表**，只有 `label` / `disabled` / `run` / `danger` / `note`（作 title）生效，`sub` 与缩略图不渲染 | 移除菜单项 |
 | `registerStreamSource(src)` | 备用播放源链的一环：`resolve(song, quality)` 返回 `{url,...}` 即采用，`null` 放行下一环；全链落空走官方 `/stream/resolve` | 移出源链 |
-| `registerKaraokeProvider(p)` | 歌词提供器：`parse(content, translation, romanization)` 返回行 —— 逐字（QRC/TTML 的词级时间轴）与行级（普通 LRC 的「整行一个音节」）都行；`null` = 放弃，宿主回退内置行级歌词 DOM（音译落在行级 `romanLyric`，与翻译共用歌词下方的辅助行，`ruby` 只留给日文振假名那种词上方注音）。`render(host, lines, ctx)` 接管正在播放页歌词容器（`ctx` 为时间/播放态/翻译与音译开关/seek 的只读闭包）；可选 `enabled()` 总开关，返回 false 即回退行级 | 移除 provider；正在播放页回退内置行级歌词 |
+| `registerKaraokeProvider(p)` | 歌词提供器：`parse(content, translation, romanization)` 返回行 —— 逐字（QRC/TTML 的词级时间轴）与行级（普通 LRC 的「整行一个音节」）都要认；`null` = 放弃，宿主回退内置行级歌词 DOM（音译落在行级 `romanLyric`，与翻译共用歌词下方的辅助行；`ruby` 是**词上方**的日文振假名，由内置引擎从 QRC `[kana:]` 标签解出，与音译两回事）。`render(host, lines, ctx)` 接管正在播放页歌词容器（`ctx` 为时间/播放态/翻译与音译开关/seek 的只读闭包）；可选 `enabled()` 总开关，返回 false 即回退行级。**注册即顶掉宿主内置的 AMLL**（先注册先得），停用后自动回落内置 | 移除 provider；正在播放页回落内置 AMLL |
 
 注意：插件源抛错会被宿主吞掉并 warn（不阻塞播放）；菜单项结构与宿主 MenuItem 同型
 （`label/note/thumb/round/danger/disabled/sub?/run?`）。
@@ -114,11 +115,13 @@ ctx.registerNowPlayingView({
   快照的 `localCover`（同源相对路径），再按 `album.mid/pmid`（刮削命中的 QQ 侧信息）
   回落 CDN。接管视图别摆一堆「点了没反应」的控件 —— 按 `src` 收掉或换成说明文案。
 - 接管期间**不要再自己画背景模糊**：宿主那两层还在，重复铺只会白烧一次解码。
-- **想画歌词就复用宿主已激活的提供器**：`karaoke()` 直接给出提供器解析好的行（毫秒时间轴），
-  这些行是 `registerKaraokeProvider` 的插件（如内置 AMLL）解析的 —— 别自己重写 QRC/TTML/LRC 解析。
-  `karaokeActive()` 表示此刻是否真的接管中（有数据 + 提供器在位且启用）；提供器自带 `enabled()`
-  关掉时为 false 但 `karaoke()` 可能还留着上次的结果。false 时务必回退 `lyrics()` 行级，
-  否则提供器被关掉后你的页面还在逐字跳（内置 AMLL 不注册开关、宿主又摘不掉它，默认播放页里恒在）。
+- **想画歌词就复用此刻在位的提供器**：`karaoke()` 直接给出解析好的行（毫秒时间轴），默认由
+  宿主内置的 AMLL 解析（逐字 QRC/TTML、行级 LRC，连 QRC `[kana:]` 振假名都挂在 `words[].ruby`）——
+  别自己重写 QRC/TTML/LRC 解析。要换成自己的逐字引擎就 `registerKaraokeProvider`，注册之后
+  `karaoke()` 给出的就是你的 `parse` 结果。
+  `karaokeActive()` 表示此刻是否真的接管中（有数据 + 提供器在位且启用）；自带 `enabled()`
+  的插件提供器关掉时为 false 但 `karaoke()` 可能还留着上次的结果。false 时务必回退 `lyrics()` 行级，
+  否则你的提供器被关掉后页面还在逐字跳（内置 AMLL 不注册开关，所以它恒算「在位」）。
   逐词高亮的时钟用自己的 rAF（notify 只有 4Hz）。
 - **要「跳转歌手/专辑/搜索」直接写 hash 路由**（`location.hash = "#/singer?mid=…&name=…"`、
   `#/album?mid=…&name=…`、`#/search?keyword=…`），歌手/专辑的 mid 在曲目快照里。

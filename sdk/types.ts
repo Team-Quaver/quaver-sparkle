@@ -310,15 +310,17 @@ export interface SparkleNpViewCtx {
   /**
    * 逐字歌词行（毫秒时间轴）。空数组 = 当前没有逐字数据。
    *
-   * 数据来自**宿主已激活的逐字提供器**（registerKaraokeProvider，如 AMLL 插件）的
-   * 解析结果 —— 整页接管视图可以据此把「当前这一句」画成逐字高亮，而不必自己
-   * 重新解析 QRC/TTML。没装提供器、提供器解析失败、或该曲没有逐字内容时都是空数组。
+   * 数据来自此刻在位的**逐字提供器**的解析结果：插件注册的提供器优先，没有插件提供器时
+   * 是宿主内置的 AMLL 引擎（逐字 QRC/TTML 与行级 LRC 都归它解析，含 `[kana:]` 振假名）。
+   * 整页接管视图据此把「当前这一句」画成逐字高亮，而不必自己重新解析 QRC/TTML/LRC。
+   * 提供器解析失败、或该曲没有逐字内容时是空数组。
    */
   karaoke(): SparkleKaraokeLine[];
   /**
    * 逐字歌词此刻是否接管中 = 有逐字数据 **且** 提供器在位并启用（提供器自己的
    * 总开关）。false 时视图应回退到行级歌词（lyrics()）。
-   * 宿主在每次 notify 重读，所以提供器开关一改就即时反映（最迟下一个播放事件/4Hz）。
+   * 内置 AMLL 不注册 `enabled()`，所以「提供器在位」对内置引擎恒为真；能把它变成 false 的
+   * 只有插件提供器自带的开关。宿主在每次 notify 重读，开关一改就即时反映（最迟下一个播放事件/4Hz）。
    */
   karaokeActive(): boolean;
 
@@ -497,8 +499,10 @@ export interface SparkleKaraokeWord {
   /** 单词级音译（AMLL 的 romanWord）；宿主不用 —— 音译是行级子行 */
   romanWord?: string;
   /**
-   * 单词级注音（AMLL 的 Ruby，词上方小字）。这是**日文振假名**那种逐词注音的位置；
-   * romaji/拼音属行级 romanLyric（翻译区域），官方 AMLL 插件不再挂 Ruby。
+   * 单词级注音（AMLL 的 Ruby，词上方小字）：这是**日文振假名**那种逐词注音的位置，
+   * 由宿主内置引擎从 QRC 的 `[kana: ...]` 标签解出（QRCKana，移植自 SPlayer-Dev/lyric-kit）。
+   * 想显示注音就渲染它，不想显示就忽略 —— 它与音译无关：romaji/拼音属行级 romanLyric
+   * （歌词下方的辅助行），两路谁也别挪到对方的位置上。
    */
   ruby?: SparkleKaraokeRuby[];
 }
@@ -537,7 +541,7 @@ export interface SparkleKaraokeRenderCtx {
   showTrans(): boolean;
   /** 歌词辅助行模式：off=关闭 / translation=翻译 / romanization=音译。
    *  渲染方自己按档位挑辅助行：优先所选那一路，本行缺数据则回落另一路，off 不显示
-   *  （官方 AMLL 插件的实现见 plugins/amll 的 pickAuxLine，规则与宿主行级视图一致）。 */
+   *  （宿主内置 AMLL 与宿主行级视图共用 src/lyric.ts:pickAux 那一份实现）。 */
   lyricAux(): "off" | "translation" | "romanization";
   /** 跳转到指定位置（毫秒） */
   seek(ms: number): void;
@@ -548,8 +552,15 @@ export interface SparkleKaraokeRenderCtx {
 
 /**
  * 歌词提供器：解析（player 拉到原始歌词后先问 provider）+ 渲染（正在播放页的歌词
- * 容器整体交给 provider）。逐字（QRC/TTML）与行级（LRC）都可交给它 —— 官方 amll 插件
- * 两种都渲染，是宿主默认且不可停用的接管方。provider 缺席时宿主才走内置行级歌词 DOM。
+ * 容器整体交给 provider）。逐字（QRC/TTML）与行级（LRC）都要认。
+ *
+ * 宿主自带一个内置实现（AMLL：逐字 QRC/TTML + 行级 LRC + QRC `[kana:]` 振假名注音），
+ * 它在注册表里排在**所有插件提供器之后**。于是：
+ *   - 不注册 = 歌词继续由内置 AMLL 渲染（做整页接管视图时照样能读 `karaoke()` 的解析结果）；
+ *   - 注册了 = 你的提供器**顶掉**内置实现（先注册先得），解析 + 渲染整条管线归你 ——
+ *     这是给「换一套歌词 / 播放器效果」留的门（把别的逐字引擎搬进来就走这条）。
+ * 覆盖内置时 `parse` 请写成全格式都认（词级 + 行级 + 注音）：解不动的部分不会回落给
+ * AMLL，而是直接掉回宿主的内置行级歌词 DOM。
  */
 export interface SparkleKaraokeProvider {
   /** 解析歌词；返回 null（或空行表）= 放弃，宿主回退普通 LRC 行级歌词。
@@ -558,7 +569,7 @@ export interface SparkleKaraokeProvider {
   /** 接管歌词容器（容器尺寸随宿主布局变化）；返回的函数在换曲/停用时调用 */
   render(host: HTMLElement, lines: SparkleKaraokeLine[], ctx: SparkleKaraokeRenderCtx): (() => void) | void;
   /** 可选总开关：false 时宿主回退行级歌词；宿主每次 notify 重读，切换即时生效。
-   *  官方 amll 插件**不注册**它 —— AMLL 是唯一渲染器，没有「关掉」这一档，宿主摘不掉它。 */
+   *  内置 AMLL 不注册它 —— 内置引擎没有「关掉」这一档，想换渲染器请注册你自己的提供器。 */
   enabled?(): boolean;
 }
 
@@ -601,7 +612,7 @@ export interface SparkleContext {
   registerNowPlayingMenuItem(item: SparkleMenuItem | ((ctx: SparkleNpMenuCtx) => SparkleMenuItem)): void;
   /** 注册备用播放源（源链按注册顺序，先注册先试） */
   registerStreamSource(source: SparkleStreamSource): void;
-  /** 注册逐字歌词提供器（先注册先得；停用即回退行级歌词） */
+  /** 注册逐字歌词提供器（先注册先得；排在宿主内置 AMLL 之前 = 覆盖它，停用即回落内置） */
   registerKaraokeProvider(provider: SparkleKaraokeProvider): void;
   /** 插件专属持久化（localStorage 命名空间） */
   storage: SparkleStorage;
