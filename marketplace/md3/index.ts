@@ -137,6 +137,8 @@ const COMPONENTS = `
   & .player {
     margin: 0; border-radius: 0; box-shadow: none; border: 0;
     border-top: 1px solid var(--md-outline-variant); background: var(--md-surface-container);
+    /* 宿主 .frame 的停靠行也吃这个间距；不清零会出现 10px 空底缝 */
+    --control-bar-dock-gap: 0px;
   }
   /* 进度条裁切层原与播放条的 14px 圆角配成一对；播放条改直角后这里也归零 */
   & .pb-fill-clip { border-radius: 0; }
