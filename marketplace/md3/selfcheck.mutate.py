@@ -9,6 +9,7 @@
 （python3 只是拿来改文件的，逻辑与插件运行时无关。）
 """
 import hashlib
+import json
 import pathlib
 import shutil
 import subprocess
@@ -31,6 +32,10 @@ def run() -> tuple[int, str]:
 
 
 originals = {f: (PLUGIN / f).read_bytes() for f in FILES}
+
+# 版本号那组变异必须跟着当前版本走：写死一个字面量，等真发版那天它会静默匹配不上，
+# 于是「找不到待替换片段」——白跑一条断言（真踩过：脚本里的 1.0.0 早就没人用了）。
+META_VERSION = json.loads((PLUGIN / "plugin.json").read_text(encoding="utf8"))["version"]
 hashes = {f: sha(PLUGIN / f) for f in FILES}
 
 # (说明, 文件, 原文, 替换文, 期望报红的断言关键词)
@@ -56,8 +61,8 @@ MUTATIONS = [
      '  & {\n',
      "菜单令牌"),
     ("版本号两处不一致", "plugin.json",
-     '"version": "1.0.0"',
-     '"version": "1.0.1"',
+     f'"version": "{META_VERSION}"',
+     f'"version": "{META_VERSION}-x"',
      "version 一致"),
     ("把 category 写进插件对象（SDK 没这字段 → tsc 报 TS2353）", "index.ts",
      '  kind: "third-party",\n',
@@ -76,8 +81,8 @@ MUTATIONS = [
      "  --panel: color-mix(in srgb, var(--md-surface) 72%, transparent);",
      "面板令牌是实底"),
     ("去掉缩态护栏 :not(.side-collapsed)（会把宿主缩态顶掉）", "index.ts",
-     "& body:not(.side-collapsed) .nav a { min-height: 56px; padding: 0 16px; gap: 12px; }",
-     "& .nav a { min-height: 56px; padding: 0 16px; gap: 12px; }",
+     "& body:not(.side-collapsed) .nav a { min-height: 40px; padding: 0 14px; gap: 12px; }",
+     "& .nav a { min-height: 40px; padding: 0 14px; gap: 12px; }",
      "缩态护栏"),
     ("队列「正在播放」行不脱染（文字回到被 Tint 的紫字压紫底）", "index.ts",
      "  & .qp-item.cur { color: var(--md-on-secondary-container); }\n",
@@ -87,6 +92,38 @@ MUTATIONS = [
      "& .qp-item.cur:not(.dragging) { background: var(--md-secondary-container); }",
      "& .qp-item.cur { background: var(--md-secondary-container); }",
      "排除拖拽态"),
+    ("投影颜色改回纯黑 rgba(0,0,0,…)（深色 tone 6 上画不出差别）", "tokens.ts",
+     "    ambient: shadowColor(32, 42, 0.50),",
+     '    ambient: "rgba(0,0,0,.50)",',
+     "每一级投影都由 --md-source 派生"),
+    ("深色那层 ambient 洗成无彩灰（看得见的前提没了，字符串层还是 lch()）", "tokens.ts",
+     "    ambient: shadowColor(32, 42, 0.50),",
+     "    ambient: shadowColor(7, 0, 0.50),",
+     "压在同方案 surface 上都看得见"),
+    ("封面档退回宿主浅色那一组给深色用（深空黑/深色方案下投影隐形）", "tokens.ts",
+     "  dark: `0 20px 60px ${shadowColor(34, 46, 0.55)}, 0 6px 18px ${shadowColor(26, 36, 0.5)}`,",
+     "  dark: `0 20px 60px ${shadowColor(24, 8, 0.12)}, 0 6px 18px ${shadowColor(22, 6, 0.1)}`,",
+     "每一级投影（含封面档）压在同方案 surface 上都看得见"),
+    ("接管态把封面投影规则摘掉（等于沿用宿主的 #0006）", "index.ts",
+     "    & .np-cover-wrap::before { box-shadow: var(--md-elev-cover); }\n",
+     "",
+     "把封面投影换成 --md-elev-cover"),
+    ("AMLL 的加光混合留着（浅色 surface 上歌词整层洗白）", "index.ts",
+     "    & .np-kara-host .amll-lyric-player { mix-blend-mode: normal; }\n",
+     "",
+     "关掉 AMLL 的加光混合"),
+    ("歌词墨色回到宿主那套掺白亮色（浅底上等于没字）", "index.ts",
+     "      --amll-lp-color: color-mix(in srgb, var(--md-primary) 55%, var(--md-on-surface));",
+     "      --amll-lp-color: color-mix(in srgb, var(--md-primary) 55%, #fff);",
+     "歌词墨色走 on-surface 家族"),
+    ("未唱遮罩不抬浓度（保持引擎按自发光设计的 .4 / .3）", "index.ts",
+     '    & .np-kara-host [class*="lyricLineWrapper"] { --bright-mask-alpha: 1; --dark-mask-alpha: .65; }',
+     '    & .np-kara-host [class*="lyricLineWrapper"] { --bright-mask-alpha: 1; }',
+     "未唱遮罩与辅助行浓度"),
+    ("深空黑那态不再顶回深色投影（浅色方案下黑底无影）", "index.ts",
+     "    --md-elev-cover: ${COVER_ELEVATION.dark};\n",
+     "",
+     "深空黑那态把投影令牌顶回深色一组"),
 ]
 
 failures = []

@@ -135,23 +135,66 @@ export const SHAPE = {
   full: "999px",
 } as const;
 
-// —— 层级阴影（M3 elevation levels 1..5 的两段式投影；dark 用更重的黑） ——
+// —— 层级阴影（M3 elevation levels 1..5 的两段式投影）——
+//
+// **投影颜色由 Tint 源色派生，不是纯黑。** 这是「深色方案看不出阴影」的正解：
+// M3 的规范投影确实是黑的，但它同时规定深色下的层级要靠 surface tint 表达 ——
+// 本主题的层级已经由 surface-container 那五档 tone 承担了，没有再叠一层 tint 覆盖，
+// 于是黑投影落在 tone 6 的表面上**等于没画**（比表面更黑的东西没有可分辨的差）。
+// 两层各司其职：
+//   · contact = 贴地的短距硬影，负责「贴着」的触感；浅色里它是主角（近黑，与 M3 观感一致），
+//     深色里它只是压暗底衬，本来就不指望看得见；
+//   · ambient = 远处的大软影，负责「浮起来」的体积感；深色下它取**比表面更亮、带彩度**的
+//     源色（tone 32 / 彩度 42），这才是深色唯一看得见的一层。
+// 两层都写成 `lch(from var(--md-source) …)` —— 换 Tint 方案 = 换源色 = 投影跟着换色，
+// 主题不需要知道用户选了哪一套（色相来自源色，tone/彩度固定，与色彩角色同一套模型）。
+//
+// ⚠️ 别把这两个颜色改回 rgba(0,0,0,…)：那等于把「深色模式看不出阴影」这个 bug 请回来，
+//    selfcheck 有行为不变量会打红（每级投影压在**同方案表面**上的可见度）。
 
-export const ELEVATION = {
+/** 一条 Tint 派生的投影色（tone/彩度固定，色相取源色；α 直接烘进值里）。 */
+const shadowColor = (tone: number, chroma: number, alpha: number) =>
+  `lch(from var(--md-source) ${tone} ${chroma} h / ${alpha})`;
+
+/** 每方案两个浓度：贴地硬影 / 远处软影。 */
+export const SHADOW_COLORS = {
   light: {
-    1: "0 1px 2px rgba(0,0,0,.30), 0 1px 3px 1px rgba(0,0,0,.15)",
-    2: "0 1px 2px rgba(0,0,0,.30), 0 2px 6px 2px rgba(0,0,0,.15)",
-    3: "0 1px 3px rgba(0,0,0,.30), 0 4px 8px 3px rgba(0,0,0,.15)",
-    4: "0 2px 3px rgba(0,0,0,.30), 0 6px 10px 4px rgba(0,0,0,.15)",
-    5: "0 4px 4px rgba(0,0,0,.30), 0 8px 12px 6px rgba(0,0,0,.15)",
+    contact: shadowColor(20, 8, 0.30),
+    ambient: shadowColor(30, 10, 0.15),
   },
   dark: {
-    1: "0 1px 3px rgba(0,0,0,.50), 0 1px 2px rgba(0,0,0,.35)",
-    2: "0 2px 6px rgba(0,0,0,.50), 0 1px 2px rgba(0,0,0,.35)",
-    3: "0 4px 8px rgba(0,0,0,.50), 0 1px 3px rgba(0,0,0,.35)",
-    4: "0 6px 10px rgba(0,0,0,.50), 0 2px 3px rgba(0,0,0,.35)",
-    5: "0 8px 12px rgba(0,0,0,.55), 0 4px 4px rgba(0,0,0,.35)",
+    contact: shadowColor(0, 0, 0.35),
+    ambient: shadowColor(32, 42, 0.50),
   },
+} as const;
+
+/** 每级两层投影的几何（M3 elevation 规格；两套方案共用，只有颜色/浓度不同）。 */
+const ELEV_GEOMETRY = {
+  1: ["0 1px 2px", "0 1px 3px 1px"],
+  2: ["0 1px 2px", "0 2px 6px 2px"],
+  3: ["0 1px 3px", "0 4px 8px 3px"],
+  4: ["0 2px 3px", "0 6px 10px 4px"],
+  5: ["0 4px 4px", "0 8px 12px 6px"],
+} as const;
+
+const elevLevel = (scheme: "light" | "dark", level: keyof typeof ELEV_GEOMETRY) => {
+  const [contact, ambient] = ELEV_GEOMETRY[level];
+  return `${contact} ${SHADOW_COLORS[scheme].contact}, ${ambient} ${SHADOW_COLORS[scheme].ambient}`;
+};
+
+export const ELEVATION = {
+  light: Object.fromEntries([1, 2, 3, 4, 5].map((lv) => [lv, elevLevel("light", lv as 1)])),
+  dark: Object.fromEntries([1, 2, 3, 4, 5].map((lv) => [lv, elevLevel("dark", lv as 1)])),
+} as Record<"light" | "dark", Record<1 | 2 | 3 | 4 | 5, string>>;
+
+/**
+ * 播放页封面的「悬浮」投影：几何沿用宿主（0 20px 60px 那一档大范围软影 + 一层贴地硬影），
+ * 颜色换成 Tint 派生。深色下这两层是**唯一能读出来的层级**，也是「播放有影 / 暂停无影」
+ * 那条特效在本主题里看得见的前提（开关本身仍归宿主的 .np.playing 管，主题只换颜色）。
+ */
+export const COVER_ELEVATION = {
+  light: `0 20px 60px ${shadowColor(24, 12, 0.4)}, 0 6px 18px ${shadowColor(18, 10, 0.3)}`,
+  dark: `0 20px 60px ${shadowColor(34, 46, 0.55)}, 0 6px 18px ${shadowColor(26, 36, 0.5)}`,
 } as const;
 
 /** M3 状态层不透明度（叠在组件自身表面色之上的 on-* 覆盖量）。 */

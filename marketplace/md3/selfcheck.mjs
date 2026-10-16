@@ -28,7 +28,7 @@ registerHooks({
   },
 });
 
-const { ELEVATION, LIGHT_ROLES, DARK_ROLES, SHAPE, STATE, TINT_PRESETS } = await import("./tokens.ts");
+const { COVER_ELEVATION, ELEVATION, LIGHT_ROLES, DARK_ROLES, SHAPE, SHADOW_COLORS, STATE, TINT_PRESETS } = await import("./tokens.ts");
 const { default: plugin } = await import("./index.ts");
 
 let failed = 0;
@@ -81,8 +81,19 @@ ok("M3 关键角色齐备", missing.length === 0, `缺 [${missing}]`);
 
 // —— 4. 形状刻度 / 层级档位 / 状态层 ——
 ok("形状刻度齐备（none/xs/s/m/l/xl/full）", ["none", "xs", "s", "m", "l", "xl", "full"].every((k) => k in SHAPE));
-ok("层级阴影 1..5 两套方案齐备",
-  ["light", "dark"].every((s) => [1, 2, 3, 4, 5].every((lv) => typeof ELEVATION[s][lv] === "string" && ELEVATION[s][lv].includes("rgba("))));
+ok("层级阴影 1..5 两套方案齐备，且每层都是两段式",
+  ["light", "dark"].every((s) => [1, 2, 3, 4, 5].every(
+    (lv) => typeof ELEVATION[s][lv] === "string" && ELEVATION[s][lv].split(",").length === 2)));
+// 投影颜色必须由 Tint 源色派生：纯黑 rgba(0,0,0,…) 落在深色方案的 tone 6 表面上没有可分辨
+// 的差，「播放有影 / 暂停无影」这条特效在本主题里就等于不存在（Lumen 被反馈的原 bug）。
+const notTint = Object.entries(ELEVATION).flatMap(([sch, t]) => Object.entries(t)
+  .filter(([, v]) => !/lch\(from var\(--md-source\)/.test(v) || /rgba\(\s*0\s*,\s*0\s*,\s*0/.test(v))
+  .map(([lv]) => sch + "." + lv));
+ok("每一级投影都由 --md-source 派生（且不含纯黑）", notTint.length === 0, notTint.join(", "));
+ok("封面投影（cover 档）两套方案齐备且同样 Tint 派生",
+  ["light", "dark"].every((s) => /lch\(from var\(--md-source\)/.test(COVER_ELEVATION[s]) && COVER_ELEVATION[s].split(",").length === 2));
+ok("contact / ambient 两层颜色齐备（浅色由 contact 撑，深色只有 ambient 看得见）",
+  ["light", "dark"].every((s) => ["contact", "ambient"].every((k) => /lch\(from var\(--md-source\)/.test(SHADOW_COLORS[s][k]))));
 ok("状态层四档齐备（hover/focus/pressed/drag）", ["hover", "focus", "pressed", "drag"].every((k) => typeof STATE[k] === "number"));
 
 // —— 5. 预设色表 ——
@@ -191,6 +202,33 @@ ok("搜索页标题与 Tag 栏有独立气口（不吃全局 20px 行高 / 旧 4
   /& \.search-head \.page-title \{[^}]*line-height:\s*1\.2/.test(noComments) &&
   /& \.search-head \.search-tabs \{[^}]*margin-bottom:\s*18px/.test(noComments));
 
+
+// —— 9e. 正在播放页：封面投影换色 + 逐字歌词在 M3 surface 上必须翻面 ——
+ok("接管态把封面投影换成 --md-elev-cover（几何与播放/暂停开关仍归宿主，主题只换颜色）",
+  /& \.np-cover-wrap::before \{[^}]*box-shadow:\s*var\(--md-elev-cover\)/.test(noComments));
+ok("接管态关掉 AMLL 的加光混合（浅色 surface 上 plus-lighter = 白字白底 = 整层歌词消失）",
+  /& \.np-kara-host \.amll-lyric-player \{[^}]*mix-blend-mode:\s*normal/.test(noComments));
+ok("接管态歌词墨色走 on-surface 家族（掺主色保色相）并摘掉深色页的 text-shadow",
+  /& \.np-kara-host \{[^}]*color:\s*var\(--md-on-surface\)/.test(noComments) &&
+  /--amll-lp-color:\s*color-mix\(in srgb, var\(--md-primary\)[^;]*var\(--md-on-surface\)/.test(noComments) &&
+  /& \.np-kara-host \{[^}]*text-shadow:\s*none/.test(noComments));
+ok("未唱遮罩与辅助行浓度抬到浅色读得出的一档（.65 / .7；按 [class*=…] 匹配 AMLL 的 CSS Modules 名）",
+  /\[class\*="lyricLineWrapper"\] \{[^}]*--dark-mask-alpha:\s*\.65/.test(noComments) &&
+  /\[class\*="lyricLineWrapper"\] \{[^}]*--bright-mask-alpha:\s*1/.test(noComments) &&
+  /\[class\*="lyricSubLine"\] \{[^}]*opacity:\s*\.7/.test(noComments));
+ok("浅底会隐形的三处控件都翻了面（音质胶囊 / ⋮ 按钮 / 音频流信息浮窗）",
+  /& \.np-qpill \{[^}]*color:\s*var\(--md-on-surface-variant\)/.test(noComments) &&
+  /& \.np-more \{[^}]*--md-on-surface-variant/.test(noComments) &&
+  /& \.np-qinfo \{[^}]*--md-on-surface/.test(noComments) &&
+  /& \.qi-row span, & \.qi-empty \{[^}]*--md-on-surface-variant/.test(noComments));
+// 深空黑那态：页面恒为黑底，与应用明暗无关 —— 投影令牌必须吃深色那一组，歌词则整套交回引擎默认。
+const deepAt = noComments.indexOf('[data-md3-np-color="deep"] .np');
+const deepSeg = deepAt < 0 ? "" : noComments.slice(deepAt);
+ok("深空黑那态把投影令牌顶回深色一组（黑底上近黑投影没有信息）",
+  /--md-elev-cover:/.test(deepSeg) && /--menu-shadow:/.test(deepSeg));
+ok("接管态的歌词翻面只属于 theme 档（深空黑保持引擎的加光口径）",
+  !/mix-blend-mode:\s*normal/.test(deepSeg) &&
+  /&\[data-md3-np="on"\]\[data-md3-np-color="theme"\] \.np/.test(noComments));
 
 ok("接管颜色不再有 default 档（开启即 theme/deep，关闭才是原版）",
   !noComments.includes(':not([data-md3-np-color="default"])') &&
@@ -322,6 +360,40 @@ try {
     ok(`${scheme}: 白字压主色的对比度全部 ≥ 4.5（WCAG AA）`, lo >= 4.5, `最低 ${lo.toFixed(2)}（${worst.id}）`);
     ok(`${scheme}: 跨色相波动 ≤ 0.6（明度锚住 = 对比度与色相无关）`, hi - lo <= 0.6, `${lo.toFixed(2)}–${hi.toFixed(2)}`);
   }
+
+  // —— 投影可见性：「深色模式看不出阴影」那条反馈的数值证据 ——
+  // 把每一级投影压在它真正落到的表面上（本主题的浮层/卡片都落在该方案的 surface 上），
+  // src-over 合成后与底色比：比值 ≈ 1 就是画了等于没画。浅色那一套由 contact（近黑）撑场面，
+  // 深色只有 ambient（比表面更亮、带彩度）看得见 —— 所以每级都要求**至少一层**站得住，
+  // 且深色站得住的那一层必须带源色彩度：纯灰在 tone 6 上没有信息量。
+  const overC = (fg, a, bg) => fg.map((v, i) => v * a + bg[i] * (1 - a));
+  const LAYER_RE = /lch\(from var\(--md-source\) ([\d.]+) ([\d.]+) h \/ ([\d.]+)\)/g;
+  const shadowReport = { light: [], dark: [] };
+  for (const preset of TINT_PRESETS) {
+    if (preset.color === "system" || preset.color === "cover") continue;
+    const H = rgbToLch(anyColor(toBarColors(anyColor(preset.color)).line)).H;
+    for (const [scheme, table] of [["light", LIGHT_ROLES], ["dark", DARK_ROLES]]) {
+      const bg = lchToRgb(table.surface.tone, table.surface.chroma, H);
+      const specs = [...[1, 2, 3, 4, 5].map((lv) => ELEVATION[scheme][lv]), COVER_ELEVATION[scheme]];
+      for (const spec of specs) {
+        const layers = [...spec.matchAll(LAYER_RE)].map((m) => {
+          const mixed = overC(lchToRgb(+m[1], +m[2], H), +m[3], bg);
+          return { c: contrast(mixed, bg), chroma: rgbToLch(mixed).C };
+        });
+        const best = layers.reduce((a, b) => (b.c > a.c ? b : a), { c: 1, chroma: 0 });
+        shadowReport[scheme].push({ id: preset.id, best: best.c, chroma: best.chroma });
+      }
+    }
+  }
+  for (const scheme of ["light", "dark"]) {
+    const rs = shadowReport[scheme];
+    const worst = rs.reduce((a, b) => (b.best < a.best ? b : a));
+    ok(`${scheme}: 每一级投影（含封面档）压在同方案 surface 上都看得见（最强层对比 ≥ 1.12）`,
+      worst.best >= 1.12, `最低 ${worst.best.toFixed(3)}（${worst.id}）`);
+  }
+  const dull = shadowReport.dark.filter((r) => r.chroma < 6);
+  ok("dark: 看得见的那层带源色彩度（≥ 6）—— 纯灰投影压在 tone 6 上等于没画",
+    dull.length === 0, `${dull.length} 个色相发灰`);
 } catch (e) {
   ok("色彩行为不变量（读宿主 ui/src/lib/color.ts 核算对比度）", false, String(e.message));
 }

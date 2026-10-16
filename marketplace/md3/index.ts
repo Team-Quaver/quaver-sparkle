@@ -15,7 +15,7 @@
 //   · 主题声明了 tint=presets，就**不能再写 --cvg-***（那是宿主地盘，写了也被行内样式压掉）。
 //     源色只能**读**。
 import { definePlugin } from "../../sdk/index";
-import { ELEVATION, SHAPE, STATE, TINT_PRESETS, schemeDecls, type SchemeName } from "./tokens";
+import { COVER_ELEVATION, ELEVATION, SHAPE, STATE, TINT_PRESETS, schemeDecls, type SchemeName } from "./tokens";
 
 /**
  * 源色取自哪个宿主变量 —— 这里有个必须绕开的环，别随手改回 --cvg-accent：
@@ -38,7 +38,9 @@ const SOURCE_VAR = "var(--cvg-bar-line, #6750a4)";
 function schemeBlock(scheme: SchemeName, indent: string): string {
   const roles = schemeDecls(scheme).map((d) => `${indent}${d}`);
   const elev = Object.entries(ELEVATION[scheme]).map(([lv, v]) => `${indent}--md-elev-${lv}: ${v};`);
-  return [...roles, ...elev].join("\n");
+  // cover = 播放页封面那一档大软影（几何沿宿主，颜色由 Tint 派生）：跟五档层级同进同退，
+  // 所以一并发进方案块 —— 深空黑那态再单独顶回深色那一组（见 NP_OVERRIDES）。
+  return [...roles, ...elev, `${indent}--md-elev-cover: ${COVER_ELEVATION[scheme]};`].join("\n");
 }
 
 /** 与方案无关的静态刻度（形状 / 状态层）。 */
@@ -293,6 +295,11 @@ const NP_OVERRIDES = `
     /* 封面氛围层只服务原来的深色玻璃；接管后关掉它，避免 M3 表面底下漏出随机封面色 */
     & .np-bg { opacity: 0 !important; }
     & .np-scrim { background: transparent; }
+    /* 封面那块「悬浮感」= 宿主的投影（几何在 style.css 的 .np-cover-wrap::before，
+       播放/暂停那下开关也是它的 .np.playing → opacity）。本主题只换**颜色**：
+       深色方案下表面只有 tone 6，比它更黑的东西画不出差别 —— 沿用 #0006 的结果是
+       「暂停/播放没有阴影特效」（现象是这条特效整条看不见，不是宿主没做）。 */
+    & .np-cover-wrap::before { box-shadow: var(--md-elev-cover); }
     /* 默认页的标题 / 歌词沿用白字口径；换成 M3 on-surface 才能在浅色方案下读清 */
     & .np-title, & .np-ly-line, & .np-ly-line.cur { color: var(--md-on-surface); }
     & .np-artist { color: var(--md-on-surface-variant); }
@@ -332,6 +339,63 @@ const NP_OVERRIDES = `
   /* 颜色档位 = 随主题设置：M3 surface 本身已带明暗两套角色 */
   &[data-md3-np="on"][data-md3-np-color="theme"] .np {
     background: var(--md-surface);
+
+    /* —— 逐字歌词（内置 AMLL）在这一档 surface 上必须整体翻面 ——
+       AMLL 的默认口径是「文字给底色**加光**」：播放器根元素带 mix-blend-mode:
+       plus-lighter，宿主又把墨色写成掺白的亮色（--amll-lp-color = accent 55% + 白 45%）。
+       本页原本恒为「模糊封面 + 深色遮罩」，两条都成立；换成 M3 surface 之后，浅色方案就是
+       往近白的底色上加光 —— 歌词整层洗白（实测：已唱 2.6 / 未唱 1.2 / 翻译 1.4，等于这页
+       没有歌词）。逐字正是这一页的主角，所以三处一起改：
+         · 混合归 normal —— 不再靠加光（桌面歌词窗早就这么处置，口径见 desktop-lyrics.css）；
+         · 墨色吃 on-surface 家族再掺一点主色 —— 浅底落深色、深底落亮色，tone 由角色表保证；
+         · 深色页那层 text-shadow 收掉（浅底下它只让字发糊，同 --fs-lyric-shadow 的道理）。
+       ⚠️ 深色方案也在这一档：plus-lighter 在近黑底上「看着还行」是加减法出来的偶然结果，
+          底色一换（换 Tint / 换档位）观感就漂 —— 归 normal 才是可预测的渲染。 */
+    & .np-kara-host {
+      color: var(--md-on-surface);
+      --amll-lp-color: color-mix(in srgb, var(--md-primary) 55%, var(--md-on-surface));
+      --amll-lp-hover-bg-color: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+      text-shadow: none;
+    }
+    & .np-kara-host .amll-lyric-player { mix-blend-mode: normal; }
+    /* AMLL 的「未唱 = 更低 alpha」「辅助行 = opacity .3」同样是自发光思路：只减光、不降色。
+       深色底上还能读，浅色底上直接掉到可读性以下 —— 而未唱那半句和翻译行恰恰是逐字歌词要读
+       的内容，于是把浓度抬到浅色也站得住的一档（未唱 .4 → .65，辅助行 .3 → .7）。
+       ⚠️ 类名来自 AMLL 的 CSS Modules（前缀随构建变），所以按 [class*="…"] 子串匹配：
+       真哪天改名，这里静默不生效 = 退回引擎原本的雾化档，字还在，只是淡。 */
+    & .np-kara-host [class*="lyricLineWrapper"] { --bright-mask-alpha: 1; --dark-mask-alpha: .65; }
+    & .np-kara-host [class*="lyricSubLine"] { opacity: .7; }
+
+    /* 行级回退列表（没有逐字数据时走这条路）：当前句也摘掉深色页投影 */
+    & .np-ly-line.cur { text-shadow: none; }
+
+    /* 音质胶囊 / ⋮ 按钮 / 音频流信息浮窗：宿主把这三处钉成「恒深色玻璃 + 白字」，
+       在这档浅底上等于整块隐形。菜单文字在上面的 on 块已经翻面，这里补齐其余消费点。 */
+    & .np-qpill {
+      background: var(--md-surface-container-high); border-color: var(--md-outline-variant);
+      color: var(--md-on-surface-variant);
+    }
+    & .np-qpill:hover, & .np-qpill.open {
+      background: var(--md-surface-container-highest); border-color: var(--md-outline);
+      color: var(--md-on-surface);
+    }
+    & .np-more { color: var(--md-on-surface-variant); }
+    & .np-more:hover {
+      background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+      color: var(--md-on-surface);
+    }
+    & .np-qinfo { color: var(--md-on-surface); }
+    & .qi-title { color: var(--md-on-surface-variant); border-bottom-color: var(--md-outline-variant); }
+    & .qi-title .qi-tier, & .qi-row { color: var(--md-on-surface); }
+    & .qi-row span, & .qi-empty { color: var(--md-on-surface-variant); }
+    & .np-menu-opt.sel {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+    & .np-menu-opt:focus-visible { outline-color: var(--md-on-surface); }
+    /* 封面占位底（无封面 / 还在加载那一块）：宿主的 #ffffff14 是「深色底上的微亮」，
+       浅底上等于没画 —— 交给 container，占位图标走 on-surface-variant */
+    & .np-cover { background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
   }
 
   /* 颜色档位 = 深空黑：和封面氛围彻底脱钩，保留接管态原有白字的可读性 */
@@ -348,6 +412,10 @@ const NP_OVERRIDES = `
     /* deep 档把 on 块换掉的菜单表面再拿回「恒深色」那一版 */
     --menu-surface: #10131c;
     --menu-line: rgba(255, 255, 255, .16);
+    /* 黑底上「比黑更黑」的投影没有信息 —— 这一态的页面与应用明暗无关，所以投影令牌
+       恒取深色那一组（浅色方案发的那组是近黑，落在 #000 上等于没画）。 */
+    --md-elev-cover: ${COVER_ELEVATION.dark};
+    --menu-shadow: ${ELEVATION.dark[2]};
     & .np-title, & .np-ly-line, & .np-ly-line.cur { color: #fff; }
     & .np-artist { color: #ffffffb8; }
     & .np-ly-empty { color: #ffffff80; }
@@ -401,7 +469,7 @@ ${NP_OVERRIDES}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.3.6",
+  version: "1.3.7",
   minHostVersion: "1.4.1",
   allowBeta: true,
   kind: "third-party",
