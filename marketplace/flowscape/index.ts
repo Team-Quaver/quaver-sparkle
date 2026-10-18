@@ -91,8 +91,11 @@ const ANIM_MS = 440;
 /** 点 ±2（上上/下下曲）是「一格跨两槽」：**一步到位、单条曲线**，不再串两段。
  *  旧实现把两格拆成两次 --fs-roll/.26s 的 ease-out 连滚：第一格已减速到近乎停住，
  *  第二格又从满速起跑 —— 接缝处速度突变，观感就是「顿一下」。单条曲线没有接缝，
- *  一整段加减速收尾，与 CSS 的 .fs-covers.fs-double（--fs-roll/.5s）同源。 */
-const ANIM_DOUBLE_MS = 500;
+ *  一整段加减速收尾，与 CSS 的 .fs-covers.fs-double（--fs-roll/.45s + 对称 ease-in-out）同源。
+ *  曲线别用「起步就冲」的 ease-out（cubic-bezier(.22,.61,.36,1) 峰值 ~19px/帧）也别用
+ *  偏后的 (.4,0,.2,1)（峰值 ~21px/帧、加加速度 ~4px/帧²）：对称的 (.33,0,.67,1) 峰值只有
+ *  ~11px/帧、加加速度 ~1.5px/帧²（同样 207px 行程实测），观感最顺。 */
+const ANIM_DOUBLE_MS = 460;
 
 /** 与宿主「翻译选项」同一组档位；SDK 不给 setter，所以 Flowscape 只能用 toggleTrans 循环到位。 */
 const AUX_MODES = ["off", "translation", "romanization"] as const;
@@ -182,7 +185,11 @@ const CSS = `
      反而挂上 preserve-3d 会把 z-index 的层级判定交给 3D 排序，卡片的层序会变得不可
      预期（谁盖谁看运气）。 */
 }
-.fs-covers.fs-double{ --fs-roll:.5s; --fs-fade:.3s; }
+/* 跨两槽（点 ±2）用**对称的 ease-in-out**（--fs-ease 覆盖单格那条 ease-out）：位移是单格
+   的 2 倍，沿用单格那条“起步就冲”的 ease-out 会在第一帧猛拉一把（~19px/帧）——用户点完
+   的观感就是「顿」。对称缓入缓出把起步和收尾都放软、峰值速度压到最低（~11px/帧），
+   加加速度也最小，跨两格最顺。时长只比单格略长（.45s vs .44s）。 */
+.fs-covers.fs-double{ --fs-roll:.45s; --fs-fade:.3s; --fs-ease:cubic-bezier(.33,0,.67,1); }
 /* 换槽动画期间把这五张卡（及其封面盒）提升到合成层：transform/opacity 由合成器
    跑，主线程此刻的其它活（换图解码、其它 DOM 写入）就不会把过渡噎住。动画一结束
    class 一撤即回收，不常驻（五张带图卡片常驻 will-change 太吃显存）。 */
@@ -194,7 +201,7 @@ const CSS = `
   /* 位移 + 缩放在 .fs-card 上（槽位），角度在 .fs-art 上（Cover Flow 的外翻）——
     两者分开，动画时各改各的互不覆盖，但 transition 用同一条曲线，时序对齐。 */
   transform:translate(-50%,-50%) translateX(var(--slot,0px)) scale(var(--slot-scale,1));
-  transition:transform var(--fs-roll,.44s) cubic-bezier(.22,.61,.36,1), opacity var(--fs-fade,.3s) ease;
+  transition:transform var(--fs-roll,.44s) var(--fs-ease,cubic-bezier(.22,.61,.36,1)), opacity var(--fs-fade,.3s) ease;
   isolation:isolate; /* 卡内覆盖层（veil/spin）自成一栈，不与邻卡互相渗透 */
 }
 .fs-card:focus-visible{ outline:2px solid #fff9; outline-offset:6px; border-radius:var(--fs-radius); }
@@ -206,7 +213,7 @@ const CSS = `
   width:var(--fs-cover); aspect-ratio:1; border-radius:var(--fs-radius);
   background:#ffffff1a;
   box-shadow:0 18px 46px #000000a6, 0 2px 0 #ffffff1f inset;
-  transition:transform var(--fs-roll,.44s) cubic-bezier(.22,.61,.36,1), opacity var(--fs-fade,.34s) ease, filter var(--fs-fade,.34s) ease, box-shadow .3s ease;
+  transition:transform var(--fs-roll,.44s) var(--fs-ease,cubic-bezier(.22,.61,.36,1)), opacity var(--fs-fade,.34s) ease, filter var(--fs-fade,.34s) ease, box-shadow .3s ease;
   /* 外翻的轴：左卡绕右边缘、右卡绕左边缘（--fs-dir 定方向，见下） */
   transform-origin:calc((1 - var(--fs-dir,0)) * 50%) center;
 }
@@ -1315,7 +1322,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     pendingDir = direction;
     pendingSteps = steps;
     animating = true;
-    // 跨两槽用更长的单条曲线（CSS 的 --fs-roll/--fs-fade 跟着变）
+    // 跨两槽换对称的 ease-in-out（CSS 的 --fs-roll/--fs-ease 跟着变）
     covers.classList.toggle("fs-double", steps === 2);
     // 收尾后两侧用的新封面：趁动画这 440/500ms 先下下来（见 preloadCover 的注释）。
     // 跨两槽时最远要铺到 ±4 的槽位，一起预热。
@@ -1600,7 +1607,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 export default definePlugin({
   id: "flowscape",
   name: "Flowscape 流境",
-  version: "1.6.2",
+  version: "1.6.3",
   author: "Team Quaver",
   kind: "third-party",
   description: "一个复刻移动听歌史上最经典的播放页模式的插件",
