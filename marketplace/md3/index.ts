@@ -220,10 +220,11 @@ const COMPONENTS = `
   & .nav a.active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 
   /* —— 列表行 / 歌单行：歌单条目保持 40px 命中区，条目间给 4px 纵向 Gap；
-     两行标题/副题再留 2px 内部行距。compact 版会让歌单区挤成一团。 —— */
+     两行标题/副题再留 2px 内部行距。compact 版会让歌单区挤成一团。
+     歌单封面与上方菜单图标共用 14px 前导轴，避免整列封面视觉左漂。 —— */
   & .row { min-height: 56px; padding: 0 16px; border-radius: var(--md-shape-s); }
   & .pl { min-height: 56px; border-radius: var(--md-shape-full); }
-  & body:not(.side-collapsed) .pl { min-height: 40px; padding: 4px 8px; }
+  & body:not(.side-collapsed) .pl { min-height: 40px; padding: 4px 14px; }
   & body:not(.side-collapsed) .pl .pname { gap: 2px; }
   & .playlists { gap: 4px; }
   & .pl-group { padding: 8px 8px 2px; }
@@ -469,7 +470,7 @@ ${NP_OVERRIDES}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.3.7",
+  version: "1.3.8",
   minHostVersion: "1.4.1",
   allowBeta: true,
   kind: "third-party",

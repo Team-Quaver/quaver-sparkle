@@ -191,6 +191,9 @@ ok("侧栏歌单区不再压缩成 0 Gap（40px 条目 + 4px 间距 + 2px 行距
   /& body:not\(\.side-collapsed\) \.pl \{[^}]*min-height:\s*40px/.test(noComments) &&
   /& \.playlists \{[^}]*gap:\s*4px/.test(noComments) &&
   /& body:not\(\.side-collapsed\) \.pl \.pname \{[^}]*gap:\s*2px/.test(noComments));
+ok("侧栏歌单封面与上方菜单图标共用 14px 前导轴",
+  /& body:not\(\.side-collapsed\) \.nav a \{[^}]*padding:\s*0 14px/.test(noComments) &&
+  /& body:not\(\.side-collapsed\) \.pl \{[^}]*padding:\s*4px 14px/.test(noComments));
 
 ok("正在播放页与 Flowscape 信息行有独立行高（不被全局 body 20px 行高压扁）",
   /& \.np-title \{[^}]*line-height:\s*1\.25/.test(noComments) &&
