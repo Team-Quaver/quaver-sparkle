@@ -88,9 +88,11 @@ const isLocalSong = (s: SparkleSongSnapshot | null): boolean =>
 /** 换槽动画时长（ms）。必须与 CSS 里 .fs-card / .fs-art 的 transform 过渡时长一致 ——
  *  短了会在半路清 data-to（卡片弹回原槽），长了会卡着不动。 */
 const ANIM_MS = 440;
-/** 点 ±2（上上/下下曲）是「连滚两格」：单格压短，两下加起来 ≈ 一次普通换槽。
- *  与 CSS 的 .fs-covers.fs-quick（--fs-roll/.26s）同源。 */
-const ANIM_QUICK_MS = 260;
+/** 点 ±2（上上/下下曲）是「一格跨两槽」：**一步到位、单条曲线**，不再串两段。
+ *  旧实现把两格拆成两次 --fs-roll/.26s 的 ease-out 连滚：第一格已减速到近乎停住，
+ *  第二格又从满速起跑 —— 接缝处速度突变，观感就是「顿一下」。单条曲线没有接缝，
+ *  一整段加减速收尾，与 CSS 的 .fs-covers.fs-double（--fs-roll/.5s）同源。 */
+const ANIM_DOUBLE_MS = 500;
 
 /** 与宿主「翻译选项」同一组档位；SDK 不给 setter，所以 Flowscape 只能用 toggleTrans 循环到位。 */
 const AUX_MODES = ["off", "translation", "romanization"] as const;
@@ -172,19 +174,18 @@ const CSS = `
 .fs-covers{
   position:relative; flex:0 0 auto;
   width:100%; height:calc(var(--fs-cover) + 10px);
-  /* 换槽动画的两个时长（JS 的 ANIM_MS / ANIM_QUICK_MS 与它们同源）。
-     .fs-quick = 点 ±2 的「连滚两格」：单格时长压短，两下加起来才与一次普通换槽相当。 */
+  /* 换槽动画时长（JS 的 ANIM_MS / ANIM_DOUBLE_MS 与它们同源）。
+     .fs-double = 点 ±2 的「一格跨两槽」：单条曲线跑完两格位移，时长≈普通换槽略长。 */
   --fs-roll:.44s; --fs-fade:.3s;
   /* 刻意**不**用 transform-style:preserve-3d：这里的立方体感全部来自 .fs-art 自己
      那一段 perspective() + rotateY()（自带透视，自成一体），不需要子元素共享 3D 空间。
      反而挂上 preserve-3d 会把 z-index 的层级判定交给 3D 排序，卡片的层序会变得不可
      预期（谁盖谁看运气）。 */
 }
-.fs-covers.fs-quick{ --fs-roll:.26s; --fs-fade:.2s; }
+.fs-covers.fs-double{ --fs-roll:.5s; --fs-fade:.3s; }
 /* 换槽动画期间把这五张卡（及其封面盒）提升到合成层：transform/opacity 由合成器
-   跑，主线程此刻的其它活（换图解码、其它 DOM 写入）就不会把过渡噎住 —— 这是
-   「点 ±2 连滚两格时动画发顿」里最容易吃到的一处。动画一结束 class 一撤即回收，
-   不常驻（五张带图卡片常驻 will-change 太吃显存）。 */
+   跑，主线程此刻的其它活（换图解码、其它 DOM 写入）就不会把过渡噎住。动画一结束
+   class 一撤即回收，不常驻（五张带图卡片常驻 will-change 太吃显存）。 */
 .fs-covers.fs-anim-next .fs-card, .fs-covers.fs-anim-prev .fs-card,
 .fs-covers.fs-anim-next .fs-card .fs-art, .fs-covers.fs-anim-prev .fs-card .fs-art{ will-change:transform, opacity, filter; }
 .fs-card{
@@ -286,7 +287,7 @@ const CSS = `
    节点会转格，图标不能按创建时的槽位写死，所以按 data-off/data-to 现判。 */
 .fs-card[data-off="1"] .fs-badge svg, .fs-card[data-off="2"] .fs-badge svg,
 .fs-card[data-to="1"] .fs-badge svg, .fs-card[data-to="2"] .fs-badge svg,
-.fs-card[data-to="3"] .fs-badge svg{ transform:scaleX(-1); }
+.fs-card[data-to="3"] .fs-badge svg, .fs-card[data-to="4"] .fs-badge svg{ transform:scaleX(-1); }
 .fs-card[data-off="-1"]:hover .fs-cap, .fs-card[data-off="1"]:hover .fs-cap,
 .fs-card[data-off="-2"]:hover .fs-cap, .fs-card[data-off="2"]:hover .fs-cap{ opacity:1; }
 .fs-card[data-off="-1"]:hover .fs-badge, .fs-card[data-off="1"]:hover .fs-badge,
@@ -420,6 +421,11 @@ const CSS = `
 .fs-card[data-to="2"]{ --slot:var(--fs-gap2); --slot-scale:.62; --fs-dir:1; z-index:3; }
 .fs-card[data-to="-3"]{ --slot:calc(-1.6 * var(--fs-gap2)); --slot-scale:.5; --fs-dir:-1; z-index:2; opacity:0; pointer-events:none; }
 .fs-card[data-to="3"]{ --slot:calc(1.6 * var(--fs-gap2)); --slot-scale:.5; --fs-dir:1; z-index:2; opacity:0; pointer-events:none; }
+/* 跨两槽（点 ±2）时**两张**卡同时出画：-3/-4（或 +3/+4）都停在框外淡出。
+   ±4 的横向位置按「与相邻槽等距」给（2 * gap2），两张出画卡在整段位移里保持一格间距，
+   不会在中途叠到一起。 */
+.fs-card[data-to="-4"]{ --slot:calc(-2 * var(--fs-gap2)); --slot-scale:.5; --fs-dir:-1; z-index:2; opacity:0; pointer-events:none; }
+.fs-card[data-to="4"]{ --slot:calc(2 * var(--fs-gap2)); --slot-scale:.5; --fs-dir:1; z-index:2; opacity:0; pointer-events:none; }
 /* 目标姿态与静态槽位同表。**必须放在所有 data-off 规则之后**：动画中一张卡同时带
    data-off（现在的槽位）与 data-to（要去槽位），两边 specificity 相同，后声明者胜 ——
    这里在后，目标态才能赢过静态态。 */
@@ -428,7 +434,8 @@ const CSS = `
   opacity:.74; filter:saturate(.85) brightness(.92);
 }
 .fs-card[data-to="-2"] .fs-art, .fs-card[data-to="2"] .fs-art,
-.fs-card[data-to="-3"] .fs-art, .fs-card[data-to="3"] .fs-art{
+.fs-card[data-to="-3"] .fs-art, .fs-card[data-to="3"] .fs-art,
+.fs-card[data-to="-4"] .fs-art, .fs-card[data-to="4"] .fs-art{
   transform:perspective(1500px) rotateY(calc(var(--fs-dir) * -56deg)) translateZ(-90px);
   opacity:.58; filter:saturate(.8) brightness(.85);
 }
@@ -1218,18 +1225,11 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   let lastMid = "", lastPrevMid = "", lastNextMid = "", lastPrevMid2 = "", lastNextMid2 = "";
   /** 换槽动画进行中：期间不刷封面数据，否则动画刚起步图就换完了，看不出「翻一格」 */
   let animating = false;
-  /** 正在跑的动画方向（结算时要用） */
+  /** 正在跑的动画方向 / 步长（结算时要用）：步长 1 = 点侧封面，2 = 点 ±2 跨两槽。 */
   let pendingDir: 1 | -1 = 1;
-  /** 还欠几格换槽动画（点 ±2 时 = 1：第一格收尾后再滚第二格）。 */
-  let queuedRolls = 0;
-  /** 排队中那一格的方向（与 pendingDir 分开存：收尾时 pendingDir 还是上一格的）。 */
-  let queuedDir: 1 | -1 = 1;
-  /** 槽位显示的曲子整体偏移（中间态用）：0 = 正常（0 号槽 = 当前曲）。
-   *  连滚两格时第一格收尾要刷成 **差一格** 的过渡态（0 号槽 = 上一首），
-   *  否则收尾那一帧会把目标曲直接填进中间槽 —— 看上去就是「没有动画，直接闪」。 */
-  let paintShift = 0;
+  let pendingSteps: 1 | 2 = 1;
   let animTimer = 0;
-  /** 多格跳转（点 ±2）期间**推迟信息三行**：封面还在连滚，标题要等最后一格落定才换，
+  /** 多格跳转（点 ±2）期间**推迟信息三行**：封面还在跨两槽滑动，标题要等落定才换，
    *  否则标题一开场就显示目标曲（甚至滑入两次），跟封面完全对不上。 */
   let deferInfo = false;
   /** 多格跳转落定后要补播的信息动画方向（0 = 没有） */
@@ -1263,19 +1263,22 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
    * 但必须**关掉它的位移过渡**（fs-hop），否则它会横穿整排飞回右边。透明度过渡
    * 保留着 —— 它就是靠淡入回到画面里的（图已在不可见时换好）。
    */
-  const settleSwitch = (direction: 1 | -1) => {
-    covers.classList.remove("fs-anim-next", "fs-anim-prev");
-    let hopper: HTMLButtonElement | null = null;
+  const settleSwitch = (direction: 1 | -1, steps: 1 | 2) => {
+    covers.classList.remove("fs-anim-next", "fs-anim-prev", "fs-double");
+    const shift = direction * steps; // 这一步跨了几格（±1 = 点侧封面，±2 = 点 ±2 曲）
+    const hoppers: HTMLButtonElement[] = [];
     for (const el of cardEls) {
       el.removeAttribute("data-to");
-      const n = Number(el.dataset.off) - direction;
-      // 环的边界 = ±2：越界（±3）的那张绕到对侧最远端 —— 五张卡转一格后槽位仍是一组排列
-      if (n < -2) { el.dataset.off = "2"; hopper = el; }
-      else if (n > 2) { el.dataset.off = "-2"; hopper = el; }
+      const n = Number(el.dataset.off) - shift;
+      // 环的边界 = ±2：越界的那张绕到对侧 —— 跨两槽时**两张同时**出画，一起绕。
+      //   n=-3→+2、n=-4→+1；n=+3→-2、n=+4→-1（五张卡转完仍恰好占满 -2..+2）
+      if (n < -2) { el.dataset.off = String(n + 5); hoppers.push(el); }
+      else if (n > 2) { el.dataset.off = String(n - 5); hoppers.push(el); }
       else el.dataset.off = String(n);
     }
-    if (hopper) {
-      const hp = hopper;
+    for (const hp of hoppers) {
+      // 出画的那张（此刻 opacity:0，看不见）要绕到对侧去当新邻曲：位移必须瞬间完成
+      // （否则会横穿整排飞回去），但透明度照常过渡 —— 它是在不可见状态下换好图再淡入。
       hp.classList.add("fs-hop");
       requestAnimationFrame(() => requestAnimationFrame(() => hp.classList.remove("fs-hop")));
     }
@@ -1283,28 +1286,10 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     adoptMain();
     sigs.clear(); // 槽位的含义变了：整排重取一次封面
     animating = false;
-    // 还欠一格 = 点 ±2 的连滚：走上面那条「先起动画、下帧补图」的接力路径（见下）。
-    if (queuedRolls > 0) {
-      // 还欠一格（点 ±2）：这一帧的槽位含义先拨到 **差一个槽位** 的过渡态 ——
-      // 0 号槽此刻物理上站着的是「上一首」，直接填目标曲会让它当场换脸（「直接闪」）。
-      paintShift = direction;
-      queuedRolls--;
-      // **先起第二格过渡**（与第一格首尾相接、同一条曲线，中间不留停顿）。真正的卡顿
-      // 来自这一帧里同步跑整轮 paintMeta（换图/歌词/画质/红心一起上）把过渡噎住，
-      // 所以这里只起动画、别的都往后挪。
-      playSwitchAnim(queuedDir, ANIM_QUICK_MS);
-      // 换图推到下一帧：出画那张此刻 opacity:0 看不见，一帧后再换封面，等它淡入时已是新图。
-      const shift = paintShift;
-      requestAnimationFrame(() => { if (host.isConnected && paintShift === shift) paintCards(ctx.current()); });
-      return;
-    }
-    // 单格动画 / 连滚的最后一格落定：整排摆好，再刷数据。
-    // 走 paintMeta（而非只用 paintCards）：缓冲圈/错误条挂在「谁是中间卡」上，中间卡刚换
-    // 主人，状态要跟着重落；deferInfo 也在此放行 —— 信息三行到这一句才换成目标曲，
-    // 于是标题与封面同步落定（这就是「标题跟着封面」）。
-    paintShift = 0;
+    // 动画落定：整排摆好，再刷数据。走 paintMeta（而非只用 paintCards）：缓冲圈/错误条
+    // 挂在「谁是中间卡」上，中间卡刚换主人，状态要跟着重落；deferInfo 也在此放行 ——
+    // 信息三行到这一句才换成目标曲，于是标题与封面同步落定（这就是「标题跟着封面」）。
     deferInfo = false;
-    covers.classList.remove("fs-quick"); // 连滚结束，时长回到常速
     paintMeta();
   };
 
@@ -1314,47 +1299,45 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
    *   +1 → 0：转正、放大、升到最前（下一首本来就在右边，滚进来当新中间）
    *    0 → -1：向左转出、后退、压暗（现在的封面滚走）
    *   -1 → -2、-2 → -3：继续左移，-3 滑到最外侧并淡出（收尾时绕到对侧 +2）
-   * 上一首镜像。目标槽位 = 当前槽位 **减去**方向 —— 点右边那张，整排就往左挪一格，
+   * 上一首镜像。目标槽位 = 当前槽位 **减去**方向×步长 —— 点右边那张，整排就往左挪一格，
    * 滚进来的正是他点的那张。
    *
-   * 点 ±2（上上/下下曲）一次跳两首：单格动画的位移对不上两首，收尾时整排会摆错，
-   * 所以**连滚两格**（见 paintSong 的方向判定与 settleSwitch 的排队逻辑）。
+   * 点 ±2（上上/下下曲）一次跳两首：步长 = 2，每张卡的 data-to 一次减两格，**单条曲线
+   * 跑完全程**（不是串两段单格动画 —— 那样接缝处会速度突变、顿一下）。跨两槽时两张卡
+   * 同时出画（±3、±4 一起淡出），收尾时一起绕到对侧（见 settleSwitch）。
    *
    * 关键设计：**JS 不量坐标**，只把「目标槽位」写进每张卡的 data-to；
    * 槽位、角度、缩放全是 CSS 里按 --fs-gap(2) / --fs-dir 算的（位移与角度共用同一条
    * transition，不会脱节）。动画期间不动 DOM 顺序，结束后交给 settleSwitch 转格。
    */
-  const playSwitchAnim = (direction: 1 | -1, ms: number = ANIM_MS) => {
-    // 调用方（paintSong / settleSwitch）已保证 !animating，或正在接力下一格。
+  const playSwitchAnim = (direction: 1 | -1, steps: 1 | 2 = 1) => {
+    // 调用方（paintSong）已保证 !animating。
     pendingDir = direction;
+    pendingSteps = steps;
     animating = true;
-    // 单格短时长 = 连滚两格中的一下（CSS 里的 --fs-roll/--fs-fade 也跟着压短）
-    covers.classList.toggle("fs-quick", ms < ANIM_MS);
-    // 收尾后两侧用的两张新封面：趁动画这 440ms 先下下来（见 preloadCover 的注释）
-    preloadCover(ctx.songAt(1), 1);
-    preloadCover(ctx.songAt(-1), -1);
-    // 目标槽位 = 当前槽位 - 方向。**不强制 reflow**：上一轮收尾已把 data-off 拨到与
-    // 上一格 data-to 重合的位置，浏览器此刻的「当前值」就是上一格终点，直接改 data-to
-    // 会从当前值平滑过渡到新目标（两格连成一条曲线）；而 `void offsetWidth` 会在换图
-    // 之后同步冲一次布局，正是接缝那一下「顿」的主要来源。
+    // 跨两槽用更长的单条曲线（CSS 的 --fs-roll/--fs-fade 跟着变）
+    covers.classList.toggle("fs-double", steps === 2);
+    // 收尾后两侧用的新封面：趁动画这 440/500ms 先下下来（见 preloadCover 的注释）。
+    // 跨两槽时最远要铺到 ±4 的槽位，一起预热。
+    for (let k = 1; k <= steps + 2; k++) { preloadCover(ctx.songAt(k), k); preloadCover(ctx.songAt(-k), -k); }
+    // 目标槽位 = 当前槽位 - 方向×步长。**不强制 reflow**：上一轮收尾已把 data-off 拨到
+    // 与 data-to 重合的位置，浏览器此刻的「当前值」就是终点，直接改 data-to 会从当前值
+    // 平滑过渡到新目标；而 `void offsetWidth` 会在换图之后同步冲一次布局，正是「顿」的来源。
     covers.classList.remove("fs-anim-next", "fs-anim-prev");
-    for (const el of cardEls) el.dataset.to = String(Number(el.dataset.off) - direction);
+    for (const el of cardEls) el.dataset.to = String(Number(el.dataset.off) - direction * steps);
     covers.classList.add(direction > 0 ? "fs-anim-next" : "fs-anim-prev");
 
     window.clearTimeout(animTimer);
     animTimer = window.setTimeout(() => {
       if (!host.isConnected) return; // 视图已卸载（停用插件/关掉开关）
-      settleSwitch(pendingDir);
-    }, ms);
+      settleSwitch(pendingDir, pendingSteps);
+    }, steps === 2 ? ANIM_DOUBLE_MS : ANIM_MS);
   };
 
   /**
-   * 把封面卡刷成当前槽位对应的曲子。**只干这一件事**（信息三行另有 setMarquee/animateInfo）——
-   * 拆出来是为了让连滚两格的接缝处能只重刷卡面、不连带跑整轮 paintMeta（那才是卡顿的来源），
-   * 也为了接缝那帧能把换图推迟到下一帧而不影响信息/歌词。
+   * 把封面卡刷成当前槽位对应的曲子。**只干这一件事**（信息三行另有 setMarquee/animateInfo）。
    *
-   * 槽位 → 曲子：常态 0 号槽 = 当前曲；连滚两格的中间态整排偏一格（paintShift），
-   * 此刻 0 号槽物理上站着的是「上一首」，得按偏移取歌，否则收尾会当场换脸。
+   * 槽位 → 曲子：0 号槽 = 当前曲，其余按 ctx.songAt(槽位) 取。
    */
   const paintCards = (cur: SparkleSongSnapshot | null) => {
     // —— 封面预热（跟随播放顺序）——
@@ -1374,8 +1357,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
       // 无障碍标签也要跟着槽位走（节点身份会转格）
       const label = o === 0 ? "播放/暂停" : o === -1 ? "上一首" : o === 1 ? "下一首" : o < 0 ? "上上首" : "下下首";
       if (el.getAttribute("aria-label") !== label) el.setAttribute("aria-label", label);
-      const off = o - paintShift;
-      const s = off === 0 ? cur : ctx.songAt(off);
+      const s = o === 0 ? cur : ctx.songAt(o);
       const url = coverOf(s, wantPx(o));
       const name = s?.name ?? "";
       const key = url + "|" + name;
@@ -1398,11 +1380,12 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
       if (cur.mid === lastNextMid) { deferInfo = false; switchDir = 1; playSwitchAnim(1); }
       else if (cur.mid === lastPrevMid) { deferInfo = false; switchDir = -1; playSwitchAnim(-1); }
       // 点 ±2（上上/下下曲）一次跳两首：新当前曲是「旧 +2 / -2 邻居」。
-      // 一格动画对不上两首的位移（收尾会把整排摆错一格），所以连滚两格 ——
-      // 第一格收尾刷「差一格」的中间态，第二格才落到目标（见 settleSwitch / paintShift）。
-      // deferInfo：这两格期间**不换标题**，等最后一格落定再换，让标题跟着封面走。
-      else if (cur.mid === lastNextMid2) { deferInfo = true; pendingInfoDir = 1; queuedRolls = 1; queuedDir = 1; playSwitchAnim(1, ANIM_QUICK_MS); }
-      else if (cur.mid === lastPrevMid2) { deferInfo = true; pendingInfoDir = -1; queuedRolls = 1; queuedDir = -1; playSwitchAnim(-1, ANIM_QUICK_MS); }
+      // 一格动画对不上两首的位移（收尾会把整排摆错一格），所以**一步跨两槽** ——
+      // 每张卡的 data-to 直接减 2 格，单条曲线跑完，而不是串两段单格动画
+      // （串两段会在接缝处速度突变，就是旧版「顿一下」的来源，见 playSwitchAnim）。
+      // deferInfo：跨槽期间**不换标题**，等落定再换，让标题跟着封面走。
+      else if (cur.mid === lastNextMid2) { deferInfo = true; pendingInfoDir = 1; playSwitchAnim(1, 2); }
+      else if (cur.mid === lastPrevMid2) { deferInfo = true; pendingInfoDir = -1; playSwitchAnim(-1, 2); }
     }
     if (cur) {
       lastMid = cur.mid;
@@ -1432,11 +1415,11 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   const paintMeta = () => {
     const cur = ctx.current();
     paintSong(cur);
-    // 连滚两格（deferInfo）期间**不重建歌词**：点 ±2 的第一次 notify 就发生在这一击的
+    // 跨两槽（deferInfo）期间**不重建歌词**：点 ±2 的第一次 notify 就发生在这一击的
     // 任务里（宿主 jump → startCurrent 同步 notify），整列歌词重建（五行版几十上百个
-    // 节点 + 逐行 onclick）会把动画首帧一起噎住 —— 观感正是「点 ±2 顿一下」。推迟到
-    // 最后一格落定的那次 paintMeta（settleSwitch 已把 deferInfo 复位）再建：那时封面
-    // 刚就位，歌词与标题（同样被 deferInfo 押后）一起换，口径一致。
+    // 节点 + 逐行 onclick）会占住主线程，把动画首帧一起噎住。推迟到落定的那次 paintMeta
+    // （settleSwitch 已把 deferInfo 复位）再建：那时封面刚就位，歌词与标题（同样被
+    // deferInfo 押后）一起换，口径一致。
     if (!deferInfo) buildLyrics(cur);
 
     // 播放/暂停：spinner（取链/缓冲）、出错（重试图标）、常规
@@ -1617,7 +1600,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 export default definePlugin({
   id: "flowscape",
   name: "Flowscape 流境",
-  version: "1.6.1",
+  version: "1.6.2",
   author: "Team Quaver",
   kind: "third-party",
   description: "一个复刻移动听歌史上最经典的播放页模式的插件",
