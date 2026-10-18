@@ -1432,7 +1432,12 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   const paintMeta = () => {
     const cur = ctx.current();
     paintSong(cur);
-    buildLyrics(cur);
+    // 连滚两格（deferInfo）期间**不重建歌词**：点 ±2 的第一次 notify 就发生在这一击的
+    // 任务里（宿主 jump → startCurrent 同步 notify），整列歌词重建（五行版几十上百个
+    // 节点 + 逐行 onclick）会把动画首帧一起噎住 —— 观感正是「点 ±2 顿一下」。推迟到
+    // 最后一格落定的那次 paintMeta（settleSwitch 已把 deferInfo 复位）再建：那时封面
+    // 刚就位，歌词与标题（同样被 deferInfo 押后）一起换，口径一致。
+    if (!deferInfo) buildLyrics(cur);
 
     // 播放/暂停：spinner（取链/缓冲）、出错（重试图标）、常规
     const loading = ctx.loading(), err = ctx.error();
@@ -1612,7 +1617,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 export default definePlugin({
   id: "flowscape",
   name: "Flowscape 流境",
-  version: "1.6.0",
+  version: "1.6.1",
   author: "Team Quaver",
   kind: "third-party",
   description: "一个复刻移动听歌史上最经典的播放页模式的插件",
