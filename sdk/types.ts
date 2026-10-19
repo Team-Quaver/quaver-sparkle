@@ -150,6 +150,23 @@ export interface SparkleThemeControlBar {
   mode: "host" | "bottom" | "floating";
 }
 
+/**
+ * 主题对「歌单显示模式」（设置→外观→歌单）的态度。
+ *
+ * 缺省 / 不声明（`theme.playlistMode` 缺省）= 宿主偏好照常生效（默认「菜单栏」，用户可在
+ * 设置里切到「歌单集合页」）；主题仍可以用自己的 CSS 调整侧栏与集合页外观。
+ *
+ * 声明了 = 主题接管呈现形态：`menu` / `collection` 是最终态，用户设置页对应分组禁用；
+ * `mode: "host"` 表示把呈现权还给宿主偏好。`collection` = 侧栏歌单区隐藏、导航按钮垂直居中，
+ * 歌单改到 `#/playlists` 以 grid 分区展示。
+ *
+ * 「菜单栏」（`menu`）：侧栏「歌单」区照常列出「我创建的歌单 / 收藏的歌单」。
+ * 「歌单集合页」（`collection`）：侧栏不再列歌单，改由集合页 grid 承载。
+ */
+export interface SparkleThemePlaylistMode {
+  mode: "host" | "menu" | "collection";
+}
+
 /** 自定义主题：css 是一组 CSS 变量覆盖，作用于 html[data-sparkle-theme="<id>"] */
 export interface SparkleTheme {
   id: string;
@@ -163,6 +180,8 @@ export interface SparkleTheme {
   menus?: SparkleThemeMenus;
   /** 播放控制条的停靠形态归谁管，见 SparkleThemeControlBar。**缺省 = 宿主接管**。 */
   controlBar?: SparkleThemeControlBar;
+  /** 歌单的显示模式归谁管，见 SparkleThemePlaylistMode。**缺省 = 宿主接管**（默认「菜单栏」）。 */
+  playlistMode?: SparkleThemePlaylistMode;
 }
 
 // —— 样式层 / 主题包 ——

@@ -501,6 +501,9 @@ export default definePlugin({
       // 这就是本插件的「Tint 设置」入口 —— 换方案 = 换源色 = 整套 M3 角色重算。
       tint: { mode: "presets", presets: TINT_PRESETS },
       controlBar: { mode: "bottom" },
+      // 歌单显示模式：Lumen 为侧栏让出空间 → 强制「歌单集合页」（侧栏不列歌单、导航垂直居中，
+      // 歌单改到 #/playlists 以 grid 分区）。这是主题最终态，设置页「外观 → 歌单」那组会被禁用。
+      playlistMode: { mode: "collection" },
       // background / menus 都不声明 = 主题接管：
       // 背景走纯 M3 surface（不铺封面环境色），菜单走 M3 elevation 面板（不透玻璃）。
       // Lumen 的播放条是满幅 bottom app bar，所以控制条停靠形态也由主题接管为 bottom。
@@ -523,7 +526,13 @@ export default definePlugin({
             <button class="opt-card" data-np-color="theme" type="button">随主题设置</button>
             <button class="opt-card" data-np-color="deep" type="button">深空黑</button>
           </div>
-          <p class="muted set-hint">「随主题设置」使用当前 Lumen 明暗方案的 M3 表面；「深空黑」使用纯黑底色。</p>`;
+          <p class="muted set-hint">「随主题设置」使用当前 Lumen 明暗方案的 M3 表面；「深空黑」使用纯黑底色。</p>
+
+          <div class="set-label" style="margin-top:14px">歌单显示</div>
+          <div class="opt-cards">
+            <button class="opt-card sel" data-pl-mode="collection" type="button" disabled>歌单集合页（Lumen 强制）</button>
+          </div>
+          <p class="muted set-hint">Lumen 把侧栏让给导航：歌单不在侧栏列出，改到「歌单」集合页以 grid 分区展示。设置 → 外观 → 歌单 由主题接管、自动禁用。</p>`;
 
         const npCards = [...box.querySelectorAll<HTMLButtonElement>("[data-np]")];
         const colorCards = [...box.querySelectorAll<HTMLButtonElement>("[data-np-color]")];
