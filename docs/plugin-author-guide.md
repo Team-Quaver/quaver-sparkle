@@ -52,6 +52,7 @@ export default definePlugin({
 | `registerThemePack(pack)` | 注册主题包（一套可切换的完整风格，如 MD3 的亮/暗/高对比）。用户在 设置 → 花火插件 → 主题 里切 | 停用插件即摘除；若正选中该包则自动回落默认外观 |
 | `registerNowPlayingWidget(w)` | 正在播放页歌词区下方的插件槽内挂部件 | 移除 DOM + 调 render 的清理函数 |
 | `registerNowPlayingView(v)` | **整页接管**正在播放页：宿主让出 `.np-inner`、隐藏原播放条与插件槽，插件自绘整页（封面流 / 歌词 / 播放控制）。`v.enabled()` 返回 false 时不接管；`render(host, ctx)` 的 ctx 见下 | 卸载插件视图、恢复默认布局、恢复播放条 |
+| `registerNowPlayingSpectrumMode(m)` | 给正在播放页的真实音频频谱注册一种自绘形态；`m.id` 为小写 kebab-case 且全局唯一，`render(host, ctx)` 里用 `ctx.frame()/onFrame()` 取 FFT 与波形。形态会出现在宿主 ⋮ 菜单 | 移出模式表；若正在使用则回落 `bars` |
 | `registerSongMenuItem(item|fn)` | 歌曲右键菜单追加项（可传函数按上下文动态生成） | 移除菜单项 |
 | `registerPlaylistMenuItem(item|fn)` | 侧栏（主菜单栏）歌单右键菜单追加项：fn 收到 `{id,title,kind,songnum}`，`kind` 是 `created` / `fav` / `virtual`（每日 30 首、我喜欢），可据此给出不同项 | 移除菜单项 |
 | `registerNowPlayingMenuItem(item|fn)` | 正在播放页「更多操作」（⋮）菜单的追加项：fn 收到 `{song}`（没在播时为 `null`）。这个面是**扁平列表**，只有 `label` / `disabled` / `run` / `danger` / `note`（作 title）生效，`sub` 与缩略图不渲染 | 移除菜单项 |
@@ -139,6 +140,22 @@ ctx.registerNowPlayingView({
 - 插件仍拿不到队列本体（只能读当前曲与两个邻曲），也改不了播放模式。
 
 参考实现：`marketplace/flowscape/`（Flowscape 流境 —— 专辑流 + 自绘控制带）。
+
+## 真实音频频谱（透传 + 扩展）
+
+宿主的「正在播放页 ⋮ → 频谱可视化」有一条由**真实播放流**驱动的 WebAudio FFT 频谱
+（默认关；内置柱状 / 镜像 / 波形）。插件有两条接入方式：
+
+1. **只取数据自己画**：`ctx.spectrum?.()` 返回门面。`frame()` 取一帧，`onFrame(cb)`
+   逐帧订阅（约 60Hz），数组按帧复用，跨帧保留请 copy；`ctx.player.spectrum()` /
+   `ctx.player.onSpectrum()` 在非整页接管场景也可用。
+2. **注册宿主菜单里的新形态**：`ctx.registerNowPlayingSpectrumMode({ id, label, render })`。
+   `render(host, ctx)` 的 `ctx` 与上面同源，`host` 是播放条上方的频谱槽；返回清理函数。
+   内置形态 id 已占用：`bars` / `mirror` / `wave`。
+
+`ctx.spectrum()` 还能读写总开关与当前形态（与宿主 ⋮ 菜单同一份持久化偏好）：
+`enabled() / setEnabled() / mode() / modes() / setMode()`。整页接管视图里宿主自带的
+频谱槽会隐藏，请用同一门面自己绘制；关掉视图后由宿主默认布局接着显示。
 
 ## storage / toast / log / player
 

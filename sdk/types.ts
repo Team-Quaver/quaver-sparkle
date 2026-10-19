@@ -273,6 +273,68 @@ export interface SparkleLyricLine {
   trans?: string;
 }
 
+/** 正在播放页频谱的一帧真实音频数据。 */
+export interface SparkleSpectrumFrame {
+  /**
+   * FFT 频域幅度，已归一化到 0..1，下标就是 AnalyserNode 的原始频点
+   * （length = frequencyBinCount，通常为 fftSize / 2）。数组会被下一帧原地复用，
+   * 要跨帧保留请自行 copy。
+   */
+  bins: Float32Array;
+  /** 时域波形，-1..1（length = fftSize）。同样按帧复用，不要原地改。 */
+  wave: Float32Array;
+  /** 当前时域 RMS 能量，0..1（便于做呼吸/发光包络，不必自己扫 wave）。 */
+  level: number;
+  /** AudioContext 采样率；用于把频点下标换算成 Hz。 */
+  sampleRate: number;
+  /** 取帧时刻（performance.now 口径，毫秒）。 */
+  timestamp: number;
+  /** 当前音频是否真的在播放；暂停时 bins/wave 会衰减到静默。 */
+  active: boolean;
+}
+
+/** 频谱采集状态；unavailable = 当前流无法被 WebAudio 解码/分析。 */
+export type SparkleSpectrumStatus = "idle" | "starting" | "live" | "unavailable";
+
+/**
+ * 正在播放页频谱门面。既能把 `frame()` 透传给插件自绘，也允许插件读写宿主开关与形态。
+ * 开关/形态与宿主 ⋮ 菜单是同一份持久化偏好；`setMode()` 只接受已注册的模式 id。
+ */
+export interface SparkleSpectrumFacade {
+  enabled(): boolean;
+  setEnabled(on: boolean): void;
+  status(): SparkleSpectrumStatus;
+  /** 当前形态 id（内置 bars / mirror / wave，或 Sparkle 插件注册的模式）。 */
+  mode(): string;
+  /** 可选项（内置 + 当前启用插件注册的模式）。 */
+  modes(): { id: string; label: string }[];
+  setMode(id: string): void;
+  /** 按需取一帧；首次调用会异步启动分析器，启动前返回 null。 */
+  frame(): SparkleSpectrumFrame | null;
+  /** 宿主逐帧取样回调；返回退订函数。 */
+  onFrame(cb: (frame: SparkleSpectrumFrame) => void): () => void;
+}
+
+/** 插件自绘频谱模式的渲染上下文。 */
+export interface SparkleNpSpectrumRenderCtx {
+  frame(): SparkleSpectrumFrame | null;
+  onFrame(cb: (frame: SparkleSpectrumFrame) => void): () => void;
+  expanded(): boolean;
+  paused(): boolean;
+  current(): SparkleSongSnapshot | null;
+}
+
+/**
+ * 可插拔的正在播放页频谱形态。宿主内置 bars / mirror / wave，插件可注册自己的形态；
+ * render 收到的 host 是频谱条内的区域，尺寸随窗口变化，返回函数在切走/停用时清理。
+ */
+export interface SparkleNpSpectrumMode {
+  /** 小写 kebab-case，全局唯一（与其它插件/内置模式同表）。 */
+  id: string;
+  label: string;
+  render(host: HTMLElement, ctx: SparkleNpSpectrumRenderCtx): (() => void) | void;
+}
+
 /**
  * 正在播放页**整页接管**视图：宿主把 .np-inner 整块让给插件，插件自绘全部内容
  * （封面流 / 信息 / 歌词 / 播放控制），并按约定隐藏底部播放条。
@@ -369,6 +431,12 @@ export interface SparkleNpViewCtx {
    * 只有插件提供器自带的开关。宿主在每次 notify 重读，开关一改就即时反映（最迟下一个播放事件/4Hz）。
    */
   karaokeActive(): boolean;
+
+  /**
+   * 真实音频频谱门面：`frame()` 取归一化 FFT/波形，`onFrame()` 逐帧订阅；
+   * 也可读写宿主开关与形态。旧宿主没有此方法：用 `ctx.spectrum?.()` 判空。
+   */
+  spectrum?(): SparkleSpectrumFacade;
 
   // —— 音量（只读） ——
   /** 0..1（静音时保留原值） */
@@ -508,6 +576,10 @@ export interface SparklePlayerFacade {
   readonly paused: boolean;
   /** 订阅播放器通知（约 4Hz + 状态变化即发）；返回退订函数 */
   on(cb: () => void): () => void;
+  /** 当前真实音频频谱帧；未启动时按需拉起分析器。旧宿主可缺省。 */
+  spectrum?(): SparkleSpectrumFrame | null;
+  /** 逐帧订阅频谱（不受 4Hz notify 限制）；返回退订函数。 */
+  onSpectrum?(cb: (frame: SparkleSpectrumFrame) => void): () => void;
 }
 
 /**
@@ -657,6 +729,8 @@ export interface SparkleContext {
   registerNowPlayingWidget(widget: SparkleNpWidget): void;
   /** 注册正在播放页整页接管视图（先注册先得；停用/关掉开关即回默认布局） */
   registerNowPlayingView(view: SparkleNpView): void;
+  /** 注册正在播放页频谱形态（与内置 bars/mirror/wave 同表；停用插件即移除） */
+  registerNowPlayingSpectrumMode(mode: SparkleNpSpectrumMode): void;
   /** 注册歌曲右键菜单项（追加在「更多操作」之前） */
   registerSongMenuItem(item: SparkleMenuItem | ((ctx: SparkleSongMenuCtx) => SparkleMenuItem)): void;
   /** 注册侧栏（主菜单栏）歌单右键菜单项（追加在内置项之后） */
