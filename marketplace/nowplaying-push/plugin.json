@@ -1,0 +1,9 @@
+{
+  "id": "nowplaying-push",
+  "name": "NowPlaying 推送",
+  "version": "1.0.0",
+  "author": "Team Quaver",
+  "description": "切歌时把当前播放信息推送到 Discord 或通用 JSON Webhook",
+  "category": "plugin",
+  "homepage": "https://github.com/Team-Quaver/quaver-sparkle"
+}
