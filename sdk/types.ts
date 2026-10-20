@@ -368,9 +368,11 @@ export interface SparkleNpViewCtx {
   // —— 曲目 ——
   current(): SparkleSongSnapshot | null;
   /** 队列里的上一首（按当前播放顺序，随机播放时也按当日洗牌序）。
-   *  播放推进一律**回绕**（顺序播放档已移除）—— 队首的上一首就是队尾那首；只有空队列才 null */
+   *  普通播放一律**回绕**（顺序播放档已移除）—— 队首的上一首就是队尾那首；只有空队列才 null。
+   *  无限电台没有上一首（恒为 null）。 */
   prevSong(): SparkleSongSnapshot | null;
-  /** 队列里的下一首（同样回绕：队尾的下一首是队首；只有空队列才 null） */
+  /** 队列里的下一首（普通播放回绕：队尾的下一首是队首；只有空队列才 null）。
+   *  无限电台轮末尚未取回下一轮时为 null，不会把本轮第一首当成下一首。 */
   nextSong(): SparkleSongSnapshot | null;
   /**
    * 以当前曲为原点、按播放顺序偏移取曲：0 = 当前，1 = 下一首，-1 = 上一首，
@@ -380,13 +382,27 @@ export interface SparkleNpViewCtx {
    * 所以歌单第一首的左侧两格照样有封面（点了也真的会跳到那一首），不会空着。
    * 只有空队列才返回 null。offset 传天文数字也安全：内部按队列长度取模，不会空转。
    *
+   * **无限电台例外**：电台只向前走，`offset < 0` 恒为 null；正向偏移不越过当前队列末尾，
+   * 也不回绕。轮末正在续轮时右侧邻曲会暂时为空，配合 `radioLoading()` 画等待态。
+   *
    * 「封面流」这类要画一整列的视图需要它：只有 prev/next 各一首时，
    * 切歌动画做不出「中间转出去 → 右边顶上 → 新的从右边转进来」的三段式
    * —— 第三张没有数据源，DOM 只能停在两张。
    */
   songAt(offset: number): SparkleSongSnapshot | null;
-  /** 队列长度（0 = 空） */
+  /** 队列长度（0 = 空；无限电台里是当前已取回、尚未裁掉的曲目数） */
   queueLength(): number;
+
+  // —— 无限电台（只读） ——
+  /** 当前是否处在「猜你喜欢」无限电台会话。
+   *  电台只向前走：没有上一首、不显示队列、循环/随机也不生效。接管视图应据此把左侧
+   *  「上一首/上上首」卡收掉，并且不要把 `songAt(-1)` 当作可跳转目标。
+   *  旧宿主没有这个方法：用 `ctx.radioActive?.() ?? false` 兼容。 */
+  radioActive?(): boolean;
+  /** 无限电台是否正在取下一轮；轮末下一首暂不可用时为 true。旧宿主缺省 false。 */
+  radioLoading?(): boolean;
+  /** 无限电台最近一次续轮错误（空串 = 无错误）。旧宿主缺省空串。 */
+  radioError?(): string;
 
   // —— 传输（只读） ——
   /** 当前播放位置（秒，裸播放头；不含歌词延迟，见 lyricDelay()） */
@@ -467,6 +483,8 @@ export interface SparkleNpViewCtx {
    * 直接跳到「播放顺序上偏移 offset 首」的那首歌（0 = 当前，2 = 下下首）。
    * 封面流里点第几张侧封面就该跳到第几首 —— 只有 next/prev 两个动作时，
    * 多张侧封面只能全部指向同一首，交互是假的。
+   *
+   * 无限电台会忽略 `offset <= 0` 与越过当前队列末尾的跳转（只向前、不回绕）。
    */
   jumpTo(offset: number): void;
   setVolume(v: number): void;

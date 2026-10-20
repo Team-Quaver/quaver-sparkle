@@ -87,7 +87,7 @@ ctx.registerNowPlayingView({
 | 分类 | 方法 |
 |---|---|
 | 页面 | `expanded()` / `gallery()` / `collapse()` |
-| 曲目 | `current()` / `prevSong()` / `nextSong()` / `songAt(offset)` / `queueLength()` |
+| 曲目 | `current()` / `prevSong()` / `nextSong()` / `songAt(offset)` / `queueLength()` / `radioActive()` / `radioLoading()` / `radioError()` |
 | 传输（只读） | `time()` / `duration()` / `paused()` / `loading()` / `error()` |
 | 歌词（只读） | `lyrics()` / `lyricState()` / `showTrans()` / `lyricAux()` / `lyricDelay()` / `karaoke()` / `karaokeActive()` |
 | 音量（只读） | `volume()` / `muted()` |
@@ -101,6 +101,10 @@ ctx.registerNowPlayingView({
 两者是同一条**回绕**语义：`songAt(-1)` 在队首拿到的就是队尾那首，`jumpTo(-1)` 也真的
 跳过去 —— 歌单第一首的左侧两格照样有封面，别自己判「到头了就留空」（那会让封面流
 在队首缺一格，而点了侧卡的跳转却回绕，方向判定跟着失配）。只有空队列才返回 null。
+**无限电台是唯一例外**：`radioActive()` 为真时只向前，`songAt(-1)` 恒为 null，
+正向偏移到本轮末尾也返回 null；`jumpTo(offset <= 0)` / 越过末尾的跳转都是 no-op。
+接管视图应把左侧「上一首/上上首」卡收掉，并在 `radioLoading()` 为真时把右侧空位画成
+续轮等待态（`radioError()` 非空时显示可理解的错误文案）。
 
 几条容易踩的：
 
@@ -122,7 +126,9 @@ ctx.registerNowPlayingView({
 - **想画歌词就复用此刻在位的提供器**：`karaoke()` 直接给出解析好的行（毫秒时间轴），默认由
   宿主内置的 AMLL 解析（逐字 QRC/TTML、行级 LRC，连 QRC `[kana:]` 振假名都挂在 `words[].ruby`）——
   别自己重写 QRC/TTML/LRC 解析。要换成自己的逐字引擎就 `registerKaraokeProvider`，注册之后
-  `karaoke()` 给出的就是你的 `parse` 结果。
+  `karaoke()` 给出的就是你的 `parse` 结果。整页接管视图若画逐字歌词，必须把 `words[].ruby`
+  排在词上方（AMLL core 的 `.5em`、居中、随 ruby 自己的时间轴扫色），不要并进下方的
+  翻译/音译辅助行。
   `karaokeActive()` 表示此刻是否真的接管中（有数据 + 提供器在位且启用）；自带 `enabled()`
   的插件提供器关掉时为 false 但 `karaoke()` 可能还留着上次的结果。false 时务必回退 `lyrics()` 行级，
   否则你的提供器被关掉后页面还在逐字跳（内置 AMLL 不注册开关，所以它恒算「在位」）。
