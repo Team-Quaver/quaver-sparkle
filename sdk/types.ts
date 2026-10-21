@@ -686,6 +686,12 @@ export interface SparkleKaraokeRenderCtx {
    *  渲染方自己按档位挑辅助行：优先所选那一路，本行缺数据则回落另一路，off 不显示
    *  （宿主内置 AMLL 与宿主行级视图共用 src/lyric.ts:pickAux 那一份实现）。 */
   lyricAux(): "off" | "translation" | "romanization";
+  /** 是否隐藏当前行之前的已播放行。宿主会按设置切换；普通滚轮浏览时宿主会临时返回 false，
+   *  让用户仍能上下翻到旧行。旧宿主没有这个方法：读取一律走 `ctx.hidePassedLines?.() ?? false`。 */
+  hidePassedLines?(): boolean;
+  /** 隐藏已播放行时，当前行顶部在歌词容器内的纵向锚位（0..1）。
+   *  null / 缺省 = 使用渲染器自己的默认对齐。旧宿主没有这个方法，按缺省处理即可。 */
+  lyricTopAnchor?(): number | null;
   /** 跳转到指定位置（毫秒，**真实播放位**，不是歌词时钟 —— 见 lyricDelay() 的换算口径） */
   seek(ms: number): void;
   /** 订阅宿主 notify（约 4Hz + 播放态/展开收起等状态变化即发）；返回退订函数。
