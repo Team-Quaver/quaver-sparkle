@@ -475,7 +475,8 @@ export interface SparkleNpViewCtx {
 
   // —— 控制 ——
   toggle(): void;
-  seek(sec: number): void;
+  /** `immediate` 仅供明确点击跳转（如歌词行）：宿主可跳过淡出直接出声。 */
+  seek(sec: number, opts?: { immediate?: boolean }): void;
   next(): void;
   /** 跳到队列里的上一首（force：忽略「重放当前曲」设置，直跳队列上一首） */
   prev(): void;
@@ -692,8 +693,9 @@ export interface SparkleKaraokeRenderCtx {
   /** 隐藏已播放行时，当前行顶部在歌词容器内的纵向锚位（0..1）。
    *  null / 缺省 = 使用渲染器自己的默认对齐。旧宿主没有这个方法，按缺省处理即可。 */
   lyricTopAnchor?(): number | null;
-  /** 跳转到指定位置（毫秒，**真实播放位**，不是歌词时钟 —— 见 lyricDelay() 的换算口径） */
-  seek(ms: number): void;
+  /** 跳转到指定位置（毫秒，**真实播放位**，不是歌词时钟 —— 见 lyricDelay() 的换算口径）。
+   *  `immediate` 仅供明确点击跳转（如歌词行）：宿主可跳过淡出直接出声。 */
+  seek(ms: number, opts?: { immediate?: boolean }): void;
   /** 订阅宿主 notify（约 4Hz + 播放态/展开收起等状态变化即发）；返回退订函数。
    *  渲染循环据此在页面重新展开时唤醒自己（收起时自停的 rAF 没有人会替你重启）。 */
   onNotify(cb: () => void): () => void;

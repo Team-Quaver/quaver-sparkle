@@ -1201,7 +1201,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
         const el = lineEls[i];
         renderLine(el, dispLines[i], karaOn);
         // 行时间是「歌词时间轴」，延迟把它挪过：点击落要点回真实播放位（行秒 + 延迟秒）
-        el.onclick = () => { browsing = false; window.clearTimeout(browseTimer); ctx.seek(Math.max(0, dispLines[Number(el.dataset.i)].t + (ctx.lyricDelay?.() ?? 0) / 1000)); };
+        el.onclick = () => { browsing = false; window.clearTimeout(browseTimer); ctx.seek(Math.max(0, dispLines[Number(el.dataset.i)].t + (ctx.lyricDelay?.() ?? 0) / 1000), { immediate: true }); };
       }
     }
     // 单行版式先留空：rAF 首次 tick 会把当前句填进来
@@ -1223,7 +1223,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     el.className = "fs-ll cur";
     el.title = "点击跳到这一句";
     karaWords = renderLine(el, l, karaOn);
-    el.onclick = () => ctx.seek(Math.max(0, l.t + (ctx.lyricDelay?.() ?? 0) / 1000));
+    el.onclick = () => ctx.seek(Math.max(0, l.t + (ctx.lyricDelay?.() ?? 0) / 1000), { immediate: true });
     lyricsRoll.append(el);
     fitOne(el);
   };
