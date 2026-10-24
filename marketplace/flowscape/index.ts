@@ -121,6 +121,8 @@ const ICON = {
   collapse: svg('<path d="M6 9.5l6 6 6-6"/>', 'width="17" height="17"'),
   // ⋮：三点用 fill，别走 svg() 的描边（描边圆点会糊成一团）
   more: `<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.85"/><circle cx="12" cy="12" r="1.85"/><circle cx="12" cy="19" r="1.85"/></svg>`,
+  // 次级菜单指示（「跳转歌手」）
+  right: svg('<path d="M9 6l6 6-6 6"/>', 'width="14" height="14"'),
 };
 
 // —— 样式（插件自带，不依赖宿主 style.css；打包成单文件后由 setup 注入一次） ——
@@ -595,6 +597,24 @@ const CSS = `
 .fs-mjump{ display:flex; flex-direction:column; gap:1px; }
 .fs-mjump:empty{ display:none; }
 .fs-msep{ height:1px; margin:5px 6px; background:#ffffff1a; }
+/* 跳转歌手次级菜单：主列表一行入口，名单向上展开。与宿主 ⋮ 次级面板同因：
+   backdrop-filter 元素是 backdrop root，子面板留在 .fs-pop 里面采不到页面底图，
+   所以用 fixed 面板挂在根上，由 JS 按入口锚点摆放（默认左弹、左余量不够换右弹）。 */
+.fs-msub{ position:relative; }
+.fs-msub-btn{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:7px 9px; border:0; border-radius:8px; cursor:pointer; font:inherit; font-size:12.5px;
+  background:transparent; color:#ffffffe0; text-align:left; width:100%;
+}
+.fs-msub-btn:hover,.fs-msub.open .fs-msub-btn{ background:#ffffff17; color:#fff; }
+.fs-msub-btn svg{ flex:none; color:#ffffff8f; }
+.fs-mslist{
+  position:fixed; left:0; top:0; z-index:7; min-width:176px; max-height:min(320px,calc(100vh - 96px));
+  padding:6px; border-radius:12px; display:flex; flex-direction:column; gap:1px;
+  overflow-y:auto; scrollbar-width:thin; opacity:0; visibility:hidden; pointer-events:none;
+  transition:opacity .14s ease, visibility .14s;
+}
+.fs-mslist.open{ opacity:1; visibility:visible; pointer-events:auto; transition:opacity .14s ease; }
 /* 更多选项里的「翻译选项」「歌词大小行」 */
 .fs-mrow{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:7px 9px; border-radius:8px; font-size:12.5px; color:#ffffffe0; cursor:pointer; }
 .fs-mrow:hover{ background:#ffffff17; color:#fff; }
@@ -655,6 +675,15 @@ function ensureStyle() {
 let store: { get(k: string): string | null; set(k: string, v: string): void } | null = null;
 
 const LY_MIN = 0.8, LY_MAX = 1.5;
+
+/** 跳转歌手次级面板挂在 body 上（fixed）：fs-pop 自带 backdrop-filter，是子元素的
+ *  backdrop root；留在菜单里面只能采到父菜单自己。视图关闭时 remove() 即可。 */
+let singerHost: HTMLElement | null = null;
+
+function disposeSingerMenu() {
+  singerHost?.remove();
+  singerHost = null;
+}
 
 function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   // 追加而不是覆写 className：宿主给的容器类（.np-view-root）留着，将来宿主给它
@@ -821,10 +850,14 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   ];
   const onDocDown = (e: Event) => {
     const t = e.target as Node;
+    if (singerHost?.contains(t)) return;
     for (const p of pops) if (p.pop.contains(t) || p.btn.contains(t)) return;
     closePops();
   };
   const closePops = () => {
+    disposeSingerMenu();
+    mMenu.querySelector(".fs-msub")?.classList.remove("open");
+    mMenu.querySelector(".fs-msub-btn")?.setAttribute("aria-expanded", "false");
     for (const p of pops) {
       p.pop.classList.remove("open");
       p.btn.classList.remove("open");
@@ -850,6 +883,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     closePops();
     window.setTimeout(() => { ctx.collapse(); location.hash = hash; }, JUMP_MS);
   };
+  /** 每次开菜单按当前曲现算：歌手收进次级面板，主列表只留一行入口。 */
   const jumpRow = (label: string, disabled: boolean, run?: () => void) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -872,11 +906,44 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
     }
     jumpBox.append(jumpRow("同名搜索", false, () => jumpTo(`#/search?keyword=${encodeURIComponent(s.name)}`)));
     const singers = (s.singer ?? []).filter((a) => !!a.mid);
-    if (!singers.length) jumpBox.append(jumpRow("跳转歌手", true));
-    for (const a of singers) {
-      jumpBox.append(jumpRow(singers.length > 1 ? `跳转歌手：${a.name}` : "跳转歌手", false,
-        () => jumpTo(`#/singer?mid=${encodeURIComponent(a.mid!)}&name=${encodeURIComponent(a.name)}`)));
-    }
+
+    if (singers.length) {
+      const row = document.createElement("div");
+      row.className = "fs-msub";
+      row.innerHTML = `<button class="fs-msub-btn" type="button" aria-haspopup="menu" aria-expanded="false">
+        <span>跳转歌手</span>${ICON.right}</button>`;
+      const trigger = row.querySelector<HTMLButtonElement>(".fs-msub-btn")!;
+
+      trigger.onclick = () => {
+        if (singerHost) { disposeSingerMenu(); return; }
+
+        singerHost = document.createElement("div");
+        singerHost.className = "fs-pop fs-mslist";
+
+        for (const a of singers) {
+          singerHost.append(jumpRow(a.name || "未知歌手", false, () => {
+            jumpTo(`#/singer?mid=${encodeURIComponent(a.mid!)}&name=${encodeURIComponent(a.name || "歌手")}`);
+          }));
+        }
+
+        document.body.append(singerHost);
+
+        const anchor = trigger.getBoundingClientRect();
+        let left = anchor.right + 8;
+
+        if (left + singerHost.offsetWidth > innerWidth - 8) left = Math.max(8, anchor.left - singerHost.offsetWidth - 8);
+
+        singerHost.style.left = `${Math.round(left)}px`;
+        singerHost.style.top = `${Math.round(Math.min(
+          Math.max(8, anchor.top - 6),
+          Math.max(8, innerHeight - 8 - singerHost.offsetHeight),
+        ))}px`;
+        singerHost.classList.add("open");
+        trigger.setAttribute("aria-expanded", "true");
+      };
+
+      jumpBox.append(row);
+    } else jumpBox.append(jumpRow("跳转歌手", true));
     const alb = s.album;
     const hasAlb = !!(alb?.mid || alb?.pmid);
     jumpBox.append(hasAlb

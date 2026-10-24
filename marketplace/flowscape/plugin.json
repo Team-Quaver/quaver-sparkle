@@ -3,6 +3,7 @@
   "name": "Flowscape 流境",
   "version": "1.7.1",
   "minHostVersion": "1.7.0",
+  "allowBeta": true,
   "author": "Team Quaver",
   "description": "一个复刻移动听歌史上最经典的播放页模式的插件",
   "category": "plugin",

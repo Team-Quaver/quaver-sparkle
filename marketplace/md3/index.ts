@@ -265,7 +265,7 @@ const COMPONENTS = `
   & .tint-field input, & .tint-hex-row input, & .qp-q { border-radius: var(--md-shape-xs); }
 
   /* —— 浮层：M3 菜单 4px —— */
-  & .ctx-menu, & .pb-qpop, & .pb-lpop, & .pb-volpop, & .np-menu, & .np-qinfo, & .tint-pop { border-radius: var(--md-shape-xs); }
+  & .ctx-menu, & .pb-qpop, & .pb-lpop, & .pb-volpop, & .np-menu, & .np-menu-sub-list, & .np-qinfo, & .tint-pop { border-radius: var(--md-shape-xs); }
 
   /* —— 对话框 / 提示条 —— */
   & .upd-dialog, & .sparkle-settings-dialog { border-radius: var(--md-shape-xl); box-shadow: var(--md-elev-3); }
