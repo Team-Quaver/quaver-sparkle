@@ -16,8 +16,8 @@
 // 别给用户留点了没反应的按钮。
 //
 // **接管必须自带出口**：播放条一收（点封面展开的唯一入口跟着没了）、.np-inner
-// 一让（⋮ 更多菜单在那儿），用户就被关在本页里只剩 ESC。所以本视图左上角
-// 常驻「收起」与「更多选项」两颗按钮 —— 这不是装饰，是接管态的必备件。
+// 一让（⋮ 更多菜单在那儿），用户就被关在本页里只剩 ESC。顶部整条交给宿主 CSD
+// 拖拽区后，出口落在底部控制带：「收起」在「更多选项」旁，两颗都是必备件。
 //
 // 工程要点：
 //   · ctx.onNotify 是 ~4Hz 的位置广播，**所有 DOM 写入先比对签名再落** —— 否则
@@ -154,13 +154,12 @@ const CSS = `
 }
 .fs-root, .fs-root *{ -webkit-user-select:none; user-select:none; }
 
-/* 顶部操作条：接管态的出口「收起」。左对齐（避开 CSD 的窗口按钮）。
-   「更多选项」已移到**底部控制带、音质选择器左边** —— 有些平台的 CSD（客户端装饰，
-   左上角交通灯 / 标题栏按钮）会盖住这里，顶部的这颗有时点不到。 */
+/* 顶部条只剩电台状态：整条高度让给宿主 CSD 拖拽区（.np-drag 铺在上方）。
+   接管态的出口「收起」「更多选项」都在**底部控制带** —— 顶部 CSD（交通灯 /
+   标题栏按钮 / 拖拽手势）再也不会盖住可点控件。 */
 .fs-top{
   flex:0 0 auto; display:flex; align-items:center; gap:6px; min-height:28px;
 }
-.fs-top .fs-iconbtn{ width:28px; height:28px; }
 /* 无限电台状态：顶栏只放一枚轻量胶囊，不抢封面焦点。轮末续歌/续歌失败时文案切换，
    aria-live 让读屏也能知道下一轮是否还在路上。 */
 .fs-radio-badge{
@@ -687,7 +686,6 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   };
   host.innerHTML = `
     <div class="fs-top">
-      <button class="fs-iconbtn" id="fs-collapse" type="button" title="收起正在播放页" aria-label="收起正在播放页">${ICON.collapse}</button>
       <span class="fs-radio-badge" id="fs-radio" hidden aria-live="polite"><i aria-hidden="true">∞</i><span id="fs-radio-text">无限电台</span></span>
     </div>
     <div class="fs-stage">
@@ -720,6 +718,7 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
           <span class="fs-volnum" id="fs-volnum">80%</span>
         </div>
         <div class="fs-ctl-group">
+          <button class="fs-iconbtn" id="fs-collapse" type="button" title="收起正在播放页" aria-label="收起正在播放页">${ICON.collapse}</button>
           <div class="fs-mwrap">
             <button class="fs-iconbtn" id="fs-more" type="button" title="更多选项" aria-label="更多选项" aria-haspopup="menu" aria-expanded="false">${ICON.more}</button>
             <div class="fs-pop fs-mmenu" id="fs-mmenu" role="menu">
@@ -740,7 +739,6 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
                 </div>
               </div>
               <div class="fs-msep"></div>
-              <button class="fs-qi" id="fs-mcollapse" type="button"><span>收起正在播放页</span></button>
             </div>
           </div>
           <div class="fs-qwrap">
@@ -791,7 +789,6 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   const auxBox = $("fs-maux");
   const auxBtns = [...auxBox.querySelectorAll<HTMLButtonElement>(".fs-mopt")];
   const lyVal = $("fs-ly-val"), lyDec = $<HTMLButtonElement>("fs-ly-dec"), lyInc = $<HTMLButtonElement>("fs-ly-inc");
-  const mCollapse = $<HTMLButtonElement>("fs-mcollapse");
   const jumpBox = $("fs-mjump");
 
   // —— 设置（宿主 storage）——
@@ -950,7 +947,6 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
   // 接管态的出口：宿主把播放条（点封面展开的唯一入口）和 .np-inner（⋮ 菜单在那儿）
   // 都收走了，不给一颗自己的按钮，用户就只能按 ESC 出去。
   collapseBtn.onclick = () => ctx.collapse();
-  mCollapse.onclick = () => { closePops(); ctx.collapse(); };
 
   // 更多选项：翻译三档 + 歌词字号（宿主 np 页那两样的对应物；路由类的
   // 「同名搜索 / 跳转歌手」SDK 没开放，不做假按钮）
@@ -1731,7 +1727,9 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
 export default definePlugin({
   id: "flowscape",
   name: "Flowscape 流境",
-  version: "1.7.0",
+  version: "1.7.1",
+  minHostVersion: "1.7.0",
+  allowBeta: true,
   author: "Team Quaver",
   kind: "third-party",
   description: "一个复刻移动听歌史上最经典的播放页模式的插件",
@@ -1760,7 +1758,7 @@ export default definePlugin({
             <button class="opt-card" data-lyr="1" type="button">单行</button>
             <button class="opt-card" data-lyr="5" type="button">五行</button>
           </div>
-          <p class="muted set-hint">流境接管整个正在播放页：封面在中间，上一首在左、下一首在右（点侧封面直接跳到那一首），下方是歌名、歌手、专辑与歌词（点歌词跳播）。底部自绘进度条（可拖拽）、音量与音质（「更多选项」在音质选择器左边）；左上角是「收起」—— 接管时原播放条会被隐藏，不从这里收起就只能按 ESC 了。停用本插件或关掉上面的开关，即回到默认正在播放页。</p>`;
+          <p class="muted set-hint">流境接管整个正在播放页：封面在中间，上一首在左、下一首在右（点侧封面直接跳到那一首），下方是歌名、歌手、专辑与歌词（点歌词跳播）。底部自绘进度条（可拖拽）、音量与音质；「收起」和「更多选项」都在音质选择器左边，顶部整条留给窗口拖拽。接管时原播放条会被隐藏。停用本插件或关掉上面的开关，即回到默认正在播放页。</p>`;
         const cards = [...box.querySelectorAll<HTMLButtonElement>("[data-opt]")];
         const lyrCards = [...box.querySelectorAll<HTMLButtonElement>("[data-lyr]")];
         const sync = () => {

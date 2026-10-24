@@ -305,9 +305,10 @@ const NP_OVERRIDES = `
     /* 页内菜单从「恒深色玻璃」改回 M3 的 elevation 表面，与全站菜单一致 */
     --menu-surface: var(--md-surface-container-high);
     --menu-line: var(--md-outline-variant);
-    & .np-menu-item, & .np-menu-switch, & .np-menu-size, & .np-menu-size button { color: var(--md-on-surface); }
+    & .np-menu-item, & .np-menu-sub-btn, & .np-menu-switch, & .np-menu-size, & .np-menu-size button { color: var(--md-on-surface); }
     & .np-menu-empty, & .np-size-val { color: var(--md-on-surface-variant); }
     & .np-menu-item:hover:not(:disabled),
+    & .np-menu-sub-btn:hover,
     & .np-menu-switch:hover,
     & .np-menu-size:hover,
     & .np-menu-size button:hover:not(:disabled) {
@@ -432,8 +433,8 @@ ${NP_OVERRIDES}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.3.8",
-  minHostVersion: "1.4.1",
+  version: "1.3.9",
+  minHostVersion: "1.7.0",
   allowBeta: true,
   kind: "third-party",
   author: "Team Quaver",
