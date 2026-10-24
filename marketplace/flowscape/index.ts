@@ -609,7 +609,8 @@ const CSS = `
 .fs-msub-btn:hover,.fs-msub.open .fs-msub-btn{ background:#ffffff17; color:#fff; }
 .fs-msub-btn svg{ flex:none; color:#ffffff8f; }
 .fs-mslist{
-  position:fixed; left:0; top:0; z-index:7; min-width:176px; max-height:min(320px,calc(100vh - 96px));
+  /* 宿主 np overlay 是 z-index:50，挂在 body 的次级面板必须比它更高才可见 */
+  position:fixed; left:0; top:0; z-index:51; min-width:176px; max-height:min(320px,calc(100vh - 96px));
   padding:6px; border-radius:12px; display:flex; flex-direction:column; gap:1px;
   overflow-y:auto; scrollbar-width:thin; opacity:0; visibility:hidden; pointer-events:none;
   transition:opacity .14s ease, visibility .14s;
@@ -767,7 +768,6 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
                   <button type="button" id="fs-ly-inc" aria-label="放大歌词" title="放大歌词">+</button>
                 </div>
               </div>
-              <div class="fs-msep"></div>
             </div>
           </div>
           <div class="fs-qwrap">
@@ -915,7 +915,11 @@ function renderFlowscape(host: HTMLElement, ctx: SparkleNpViewCtx) {
       const trigger = row.querySelector<HTMLButtonElement>(".fs-msub-btn")!;
 
       trigger.onclick = () => {
-        if (singerHost) { disposeSingerMenu(); return; }
+        if (singerHost) {
+          disposeSingerMenu();
+          trigger.setAttribute("aria-expanded", "false");
+          return;
+        }
 
         singerHost = document.createElement("div");
         singerHost.className = "fs-pop fs-mslist";
