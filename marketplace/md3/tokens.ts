@@ -1,4 +1,4 @@
-// Material Design 3 — 令牌定义（纯数据 + 纯类型，无运行时依赖，可在 node 里直接 import 做数值自检）
+// Lumen 流光 — 令牌定义（纯数据 + 纯类型，无运行时依赖，可在 node 里直接 import 做数值自检）
 //
 // 色彩体系：源色 = --cvg-bar-line（宿主按本主题的 Tint 方案写下的播放条线色，见 index.ts 顶部
 // 为何不用 --cvg-accent），用 **CSS 相对颜色语法** lch(from …) 推导 M3 的 tone 体系。
@@ -121,6 +121,7 @@ export const TINT_PRESETS: { id: string; label: string; color: string }[] = [
   { id: "md3-magenta", label: "品红", color: "#8e4585" },
   { id: "md3-system", label: "系统强调色", color: "system" }, // 哨兵值，见宿主 sparkle/theme-tint.ts
   { id: "md3-cover", label: "封面颜色", color: "cover" },   // 哨兵值，换曲后跟随封面主色
+  { id: "md3-custom", label: "自定义颜色", color: "custom" }, // 哨兵值，宿主提供取色 UI（按主题 id 分档存储）
 ];
 
 // —— 形状刻度（M3 shape scale，单位 px；full = 全圆角） ——

@@ -1,4 +1,4 @@
-// Material Design 3 — 插件自检（不依赖宿主，可在 node 里直接跑）
+// Lumen 流光 — 插件自检（不依赖宿主，可在 node 里直接跑）
 //
 // 为什么放在插件目录：本插件的硬约束是「只读本体、不改本体」，所以不能往
 // ui/scripts/verify-sparkle.ts 里加断言。token 表与 CSS 生成的完整性属于插件自己的事，
@@ -99,13 +99,14 @@ ok("状态层四档齐备（hover/focus/pressed/drag）", ["hover", "focus", "pr
 // —— 5. 预设色表 ——
 ok("预设色至少 2 套（1 套 = Tint 设置里没得选）", TINT_PRESETS.length >= 2, `当前 ${TINT_PRESETS.length}`);
 ok("预设色 id 唯一", new Set(TINT_PRESETS.map((p) => p.id)).size === TINT_PRESETS.length);
-ok("预设色色值与标签齐备（#hex，或 host 的 'system'/'cover' 哨兵）",
+ok("预设色色值与标签齐备（#hex，或 host 的 'system'/'cover'/'custom' 哨兵）",
   TINT_PRESETS.every((p) =>
-    (/^#[0-9a-f]{6}$/i.test(p.color) || p.color === "system" || p.color === "cover") && p.label && p.id));
+    (/^#[0-9a-f]{6}$/i.test(p.color) || p.color === "system" || p.color === "cover" || p.color === "custom") && p.label && p.id));
 ok("哨兵方案只出现一次、且不在第一位（第一位是默认档，得是具体色值）",
   TINT_PRESETS.filter((p) => p.color === "system").length <= 1 &&
   TINT_PRESETS.filter((p) => p.color === "cover").length === 1 &&
-  TINT_PRESETS[0].color !== "system" && TINT_PRESETS[0].color !== "cover");
+  TINT_PRESETS.filter((p) => p.color === "custom").length === 1 &&
+  TINT_PRESETS[0].color !== "system" && TINT_PRESETS[0].color !== "cover" && TINT_PRESETS[0].color !== "custom");
 
 // —— 6. 接线：走真实的 setup() 注册路径取主题对象（不是另调一个字符串构造函数） ——
 let theme;
@@ -224,20 +225,9 @@ ok("浅底会隐形的三处控件都翻了面（音质胶囊 / ⋮ 按钮 / 音
   /& \.np-more \{[^}]*--md-on-surface-variant/.test(noComments) &&
   /& \.np-qinfo \{[^}]*--md-on-surface/.test(noComments) &&
   /& \.qi-row span, & \.qi-empty \{[^}]*--md-on-surface-variant/.test(noComments));
-// 深空黑那态：页面恒为黑底，与应用明暗无关 —— 投影令牌必须吃深色那一组，歌词则整套交回引擎默认。
-const deepAt = noComments.indexOf('[data-md3-np-color="deep"] .np');
-const deepSeg = deepAt < 0 ? "" : noComments.slice(deepAt);
-ok("深空黑那态把投影令牌顶回深色一组（黑底上近黑投影没有信息）",
-  /--md-elev-cover:/.test(deepSeg) && /--menu-shadow:/.test(deepSeg));
-ok("接管态的歌词翻面只属于 theme 档（深空黑保持引擎的加光口径）",
-  !/mix-blend-mode:\s*normal/.test(deepSeg) &&
-  /&\[data-md3-np="on"\]\[data-md3-np-color="theme"\] \.np/.test(noComments));
-
-ok("接管颜色不再有 default 档（开启即 theme/deep，关闭才是原版）",
-  !noComments.includes(':not([data-md3-np-color="default"])') &&
+ok("接管颜色固定随主题设置（只吃 on/off，没有第二档颜色）",
   /&\[data-md3-np="on"\] \.np/.test(noComments) &&
-  /&\[data-md3-np="on"\]\[data-md3-np-color="theme"\] \.np/.test(noComments) &&
-  /&\[data-md3-np="on"\]\[data-md3-np-color="deep"\] \.np/.test(noComments));
+  !/\[data-md3-np-color="(?!theme)/.test(noComments));
 
 ok("满幅：.body 去掉了外距与间距",
   /& \.body\s*\{(?=[^}]*padding:\s*0)(?=[^}]*gap:\s*0)/.test(noComments));
@@ -342,11 +332,11 @@ try {
   };
 
   // 每个预设实际渲染出的 on-primary / primary 对比度（宿主写的源色只贡献色相）。
-  // "system" 哨兵跳过：源色运行时才知（宿主探测的系统强调色），静态算不了；
+  // "system"/"cover"/"custom" 哨兵跳过：源色运行时才知，静态算不了；
   // 任意色相下对比度恒定本就是 tone 锚定的不变量，用其余七套色相家族代表。
   const perScheme = { light: [], dark: [] };
   for (const p of TINT_PRESETS) {
-    if (p.color === "system" || p.color === "cover") continue;
+    if (p.color === "system" || p.color === "cover" || p.color === "custom") continue;
     const src = rgbToLch(anyColor(toBarColors(anyColor(p.color)).line));
     for (const [scheme, table] of [["light", LIGHT_ROLES], ["dark", DARK_ROLES]]) {
       const render = (name) => {
@@ -373,7 +363,7 @@ try {
   const LAYER_RE = /lch\(from var\(--md-source\) ([\d.]+) ([\d.]+) h \/ ([\d.]+)\)/g;
   const shadowReport = { light: [], dark: [] };
   for (const preset of TINT_PRESETS) {
-    if (preset.color === "system" || preset.color === "cover") continue;
+    if (preset.color === "system" || preset.color === "cover" || preset.color === "custom") continue;
     const H = rgbToLch(anyColor(toBarColors(anyColor(preset.color)).line)).H;
     for (const [scheme, table] of [["light", LIGHT_ROLES], ["dark", DARK_ROLES]]) {
       const bg = lchToRgb(table.surface.tone, table.surface.chroma, H);

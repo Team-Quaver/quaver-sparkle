@@ -317,7 +317,7 @@ ctx.registerTheme({ id: "t2", name: "T2", css: `…`, menus: { mode: "host" } })
 
 `registerTheme` 只能覆盖 `--bg / --card / --acc` 那十来个变量。宿主样式表里**硬编码**
 的部分它管不到 —— 实测 `ui/src/style.css` 有 405 处 `var()` 引用，但同时有 182 个色值
-字面量、73 处 `border-radius`、28 处 `box-shadow`。所以想做 Material Design 3 / 毛玻璃 /
+字面量、73 处 `border-radius`、28 处 `box-shadow`。所以想做 Lumen 流光 / 毛玻璃 /
 极简大字这种「圆角体系、阴影层级、组件形态全换一遍」的主题，得能注入**任意 CSS**。
 
 ### 常驻样式层（随插件启停）
@@ -382,7 +382,7 @@ ctx.registerTheme({
 ```ts
 ctx.registerThemePack({
   id: "md3",
-  name: "Material Design 3",
+  name: "Lumen 流光",
   author: "…",
   description: "圆润的 MD3 风格",
   preview: ["#6750a4", "#eaddff", "#1d1b20"], // 设置页色板（纯展示）

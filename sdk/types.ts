@@ -73,7 +73,9 @@ export interface SparkleTintPreset {
    * Noctalia / matugen 模板产物、KDE / GNOME / GTK / macOS / Windows 的系统强调色）；
    * `"cover"` = 跟随**当前曲封面主色**。宿主会解析校验，非法项忽略并 warn。哨兵档读不到
    * 对应颜色时，宿主回落到你的第一套非哨兵方案（一套都没有则无色，让主题自己的
-   * `--acc` 显出来）。
+   * `--acc` 显出来）。另有哨兵值 `"custom"` = 用户自选颜色：宿主在外观设置里就地弹
+   * 颜色选择器，色值按主题 id 分档存储 —— 主题只需把它声明成一档方案，不需要自己
+   * 提供取色 UI。
    */
   color: string;
 }
@@ -188,7 +190,7 @@ export interface SparkleTheme {
 //
 // 为什么需要这一层：`registerTheme` 只能覆盖 --bg/--card/--acc 那十来个变量，而宿主
 // style.css 里有大量**硬编码**（圆角 73 处、阴影 28 处、色值字面量 182 个）。想做
-// Material Design 3 / 毛玻璃 / 极简体这种「换一套设计语言」的主题，变量组远远不够
+// Lumen 流光 / 毛玻璃 / 极简体这种「换一套设计语言」的主题，变量组远远不够
 // ——圆角体系、阴影层级、组件形态都得重写。那就得让插件能注入**任意 CSS**。
 //
 // 注入的是整页样式（作用于 :root 之下的一切，含插件自己的 UI），因此：
@@ -214,7 +216,7 @@ export interface SparkleStyleLayer {
 
 /**
  * 主题包：插件提供的一整套风格（每套一个 style layer），用户在设置页切换。
- * 典型用法 = Material Design 3：一个包给「MD3 亮 / MD3 暗 / MD3 高对比」三套。
+ * 典型用法 = Lumen 流光：一个包给「亮 / 暗 / 高对比」三套。
  */
 export interface SparkleThemePack {
   id: string;
@@ -749,7 +751,7 @@ export interface SparkleContext {
   registerTheme(theme: SparkleTheme): void;
   /** 追加一张全站样式层（任意 CSS；order 决定层序，缺省 0）。与主题包的选择无关 */
   registerStyleLayer(layer: SparkleStyleLayer): void;
-  /** 注册主题包（一套可切换的完整风格，如 Material Design 3 的亮/暗/高对比） */
+  /** 注册主题包（一套可切换的完整风格，如 Lumen 流光的亮/暗/高对比） */
   registerThemePack(pack: SparkleThemePack): void;
   /** 注册正在播放页小部件 */
   registerNowPlayingWidget(widget: SparkleNpWidget): void;

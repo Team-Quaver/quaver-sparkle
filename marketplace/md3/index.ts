@@ -1,4 +1,4 @@
-// Material Design 3 — 主题实现
+// Lumen 流光 — 主题实现
 //
 // 只做两件事：
 //   ① 把 M3 色彩角色（--md-*）与一组静态令牌（形状刻度 / 层级阴影 / 状态层）写进
@@ -39,7 +39,7 @@ function schemeBlock(scheme: SchemeName, indent: string): string {
   const roles = schemeDecls(scheme).map((d) => `${indent}${d}`);
   const elev = Object.entries(ELEVATION[scheme]).map(([lv, v]) => `${indent}--md-elev-${lv}: ${v};`);
   // cover = 播放页封面那一档大软影（几何沿宿主，颜色由 Tint 派生）：跟五档层级同进同退，
-  // 所以一并发进方案块 —— 深空黑那态再单独顶回深色那一组（见 NP_OVERRIDES）。
+  // 所以一并发进方案块。
   return [...roles, ...elev, `${indent}--md-elev-cover: ${COVER_ELEVATION[scheme]};`].join("\n");
 }
 
@@ -285,10 +285,7 @@ const COMPONENTS = `
  *
  * 宿主默认页和 Flowscape 都铺在 .np 上：默认页自带深色玻璃，Flowscape 则直接借这层
  * 背景。这里的开关就是把「主题要不要越过这层默认视觉」拆出来 —— 关闭时保持
- * Quaver Design 的原版封面氛围；开启后颜色只在「随主题设置 / 深空黑」里选。
- *
- * 历史版本曾把 default 作为颜色档位；现在运行时把旧值或缺省值都归一到 theme，
- * 避免接管开着却仍然保留原版视觉的歧义。
+ * Quaver Design 的原版封面氛围；开启后统一用当前明暗方案的 M3 surface。
  */
 const NP_OVERRIDES = `
   &[data-md3-np="on"] .np {
@@ -337,8 +334,8 @@ const NP_OVERRIDES = `
     & .fs-qi:hover, & .fs-mrow:hover { color: var(--md-on-surface); background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
   }
 
-  /* 颜色档位 = 随主题设置：M3 surface 本身已带明暗两套角色 */
-  &[data-md3-np="on"][data-md3-np-color="theme"] .np {
+  /* 颜色固定 = 随主题设置：M3 surface 本身已带明暗两套角色 */
+  &[data-md3-np="on"] .np {
     background: var(--md-surface);
 
     /* —— 逐字歌词（内置 AMLL）在这一档 surface 上必须整体翻面 ——
@@ -399,47 +396,12 @@ const NP_OVERRIDES = `
     & .np-cover { background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
   }
 
-  /* 颜色档位 = 深空黑：和封面氛围彻底脱钩，保留接管态原有白字的可读性 */
-  &[data-md3-np="on"][data-md3-np-color="deep"] .np {
-    background: #000;
-    & .np-scrim { background: #000; }
-    /* 深空黑独立于应用明暗：回到 Flowscape 的亮字与柔阴影默认值。 */
-    --fs-lyric-color: initial;
-    --fs-lyric-unsung: initial;
-    --fs-lyric-highlight: initial;
-    --fs-lyric-shadow: initial;
-    --fs-lyric-filter: initial;
-    --fs-lyric-translation-shadow: initial;
-    /* deep 档把 on 块换掉的菜单表面再拿回「恒深色」那一版 */
-    --menu-surface: #10131c;
-    --menu-line: rgba(255, 255, 255, .16);
-    /* 黑底上「比黑更黑」的投影没有信息 —— 这一态的页面与应用明暗无关，所以投影令牌
-       恒取深色那一组（浅色方案发的那组是近黑，落在 #000 上等于没画）。 */
-    --md-elev-cover: ${COVER_ELEVATION.dark};
-    --menu-shadow: ${ELEVATION.dark[2]};
-    & .np-title, & .np-ly-line, & .np-ly-line.cur { color: #fff; }
-    & .np-artist { color: #ffffffb8; }
-    & .np-ly-empty { color: #ffffff80; }
-    & .np-menu-item, & .np-menu-switch, & .np-menu-size, & .np-menu-size button { color: #ffffffe6; }
-    & .np-menu-empty, & .np-size-val { color: #ffffff8c; }
-    & .np-menu-item:hover:not(:disabled),
-    & .np-menu-switch:hover,
-    & .np-menu-size:hover,
-    & .np-menu-size button:hover:not(:disabled) {
-      color: #fff;
-      background: #ffffff1f;
-    }
-    & .fs-title { color: #fff; }
-    & .fs-artist { color: #ffffffcc; }
-    & .fs-album { color: #ffffff8f; }
-    & .fs-ly-empty { color: #ffffff7a; }
-  }
 `;
 
 /** 组装整份主题 CSS。 */
 function buildCss(): string {
   return `
-  /* ===== Material Design 3 · 令牌 =====
+  /* ===== Lumen 流光 · 令牌 =====
      源色 = 宿主按本主题 Tint 方案写下的染色（见文件顶部的“为什么不用 --cvg-accent”） */
   --md-source: ${SOURCE_VAR};
 
@@ -479,23 +441,19 @@ export default definePlugin({
   // category 是安装元数据，只属于 plugin.json（设置页据此把已装内容归入主题/插件/扩展）。
   description: "一款复刻 Material You 设计的主题插件",
   setup(ctx) {
-    // 两个开关都以 html dataset 暴露给主题 CSS：读 storage 初始化，设置页点击即时改。
+    // 接管开关以 html dataset 暴露给主题 CSS：读 storage 初始化，设置页点击即时改。
+    // 播放页颜色固定「随主题设置」：M3 surface 本身已带明暗两套角色，不再拆第二档。
     const npOn = () => ctx.storage.get("np") !== "off";
-    const npColor = () => {
-      const v = ctx.storage.get("npColor");
-      // 旧版本可能存过 default；接管开启后不再允许这档，统一回落到随主题设置。
-      return v === "deep" ? "deep" : "theme";
-    };
     const syncNpDataset = () => {
       if (typeof document === "undefined") return;
       document.documentElement.dataset.md3Np = npOn() ? "on" : "off";
-      document.documentElement.dataset.md3NpColor = npColor();
+      document.documentElement.dataset.md3NpColor = "theme";
     };
     syncNpDataset();
 
     ctx.registerTheme({
       id: "md3",
-      name: "Material Design 3",
+      name: "Lumen 流光",
       css: buildCss(),
       // Tint 交给主题自带方案：用户在设置页挑（第一个是默认）。
       // 这就是本插件的「Tint 设置」入口 —— 换方案 = 换源色 = 整套 M3 角色重算。
@@ -521,12 +479,7 @@ export default definePlugin({
           </div>
           <p class="muted set-hint">开启后 Lumen 会统一正在播放页与 Flowscape 的表面色；关闭时保留它们原有的深色封面氛围。</p>
 
-          <div class="set-label" style="margin-top:14px">正在播放页/Flowscape 颜色</div>
-          <div class="opt-cards">
-            <button class="opt-card" data-np-color="theme" type="button">随主题设置</button>
-            <button class="opt-card" data-np-color="deep" type="button">深空黑</button>
-          </div>
-          <p class="muted set-hint">「随主题设置」使用当前 Lumen 明暗方案的 M3 表面；「深空黑」使用纯黑底色。</p>
+          <p class="muted set-hint" style="margin-top:10px">接管后正在播放页与 Flowscape 使用当前 Lumen 明暗方案的 M3 表面。</p>
 
           <div class="set-label" style="margin-top:14px">歌单显示</div>
           <div class="opt-cards">
@@ -535,21 +488,12 @@ export default definePlugin({
           <p class="muted set-hint">Lumen 把侧栏让给导航：歌单不在侧栏列出，改到「歌单」集合页以 grid 分区展示。设置 → 外观 → 歌单 由主题接管、自动禁用。</p>`;
 
         const npCards = [...box.querySelectorAll<HTMLButtonElement>("[data-np]")];
-        const colorCards = [...box.querySelectorAll<HTMLButtonElement>("[data-np-color]")];
         const sync = () => {
           npCards.forEach((b) => b.classList.toggle("sel", (b.dataset.np === "on") === npOn()));
-          colorCards.forEach((b) => b.classList.toggle("sel", b.dataset.npColor === npColor()));
         };
         npCards.forEach((b) => {
           b.onclick = () => {
             ctx.storage.set("np", b.dataset.np === "on" ? "on" : "off");
-            syncNpDataset();
-            sync();
-          };
-        });
-        colorCards.forEach((b) => {
-          b.onclick = () => {
-            ctx.storage.set("npColor", b.dataset.npColor === "deep" ? "deep" : "theme");
             syncNpDataset();
             sync();
           };
