@@ -356,7 +356,7 @@ const NP_OVERRIDES = `
       --amll-lp-hover-bg-color: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
       text-shadow: none;
     }
-    & .np-kara-host .amll-lyric-player { mix-blend-mode: normal; }
+    & .np-kara-host .amll-lyric-player { mix-blend-mode: plus-lighter; }
     /* AMLL 的「未唱 = 更低 alpha」「辅助行 = opacity .3」同样是自发光思路：只减光、不降色。
        深色底上还能读，浅色底上直接掉到可读性以下 —— 而未唱那半句和翻译行恰恰是逐字歌词要读
        的内容，于是把浓度抬到浅色也站得住的一档（未唱 .4 → .65，辅助行 .3 → .7）。

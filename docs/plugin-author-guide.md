@@ -264,6 +264,10 @@ output_path = "$XDG_CONFIG_HOME/quaver-music/system-theme.json"
 | **不写 `background`**（默认） | 主题 | 宿主**让位**：那一层整个不画，设置页的「背景」整组禁用并注明由你接管。想自带背景就在 `css` 里画（覆盖 `--bg`、或用伪元素铺整窗） |
 | `background: { mode: "host" }` | 用户 | 用户的三档与模糊强度照常生效。你就**别**再自己铺整窗背景了 —— 那会和用户选的东西打架 |
 
+`background.renderer` 还能指定呈现风格（可选，只在 `mode: "host"` 时生效）：
+`"quaver"` = Quaver Design 的封面模糊铺底；`"mesh"` = AMLL MeshGradientRenderer
+的网格流动渐变（默认）。不写 = 跟随用户在设置里选的那套。
+
 ```ts
 // 1) 不写 background：主题自带背景（比如自己在 css 里铺一层渐变/纹样），宿主让位
 ctx.registerTheme({

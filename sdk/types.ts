@@ -114,7 +114,19 @@ export interface SparkleThemeTint {
  */
 export interface SparkleThemeBackground {
   mode: "host";
+  /** 呈现风格（可选）：缺省 = 宿主用户偏好（默认 mesh）。见 SparkleBackgroundRenderer。 */
+  renderer?: SparkleBackgroundRenderer;
 }
+
+/**
+ * 背景的呈现风格（宿主内置两套：`quaver` = Quaver Design 的封面模糊铺底；
+ * `mesh` = AMLL MeshGradientRenderer 的网格流动渐变）。
+ *
+ * 只在主题声明 `background: { mode: "host" }` 时生效；缺省回落宿主偏好（`mesh`）。
+ * 与背景「归谁管」正交：主题自带背景（不声明 background）时宿主整层不画，
+ * 这个字段无从谈起。
+ */
+export type SparkleBackgroundRenderer = "quaver" | "mesh";
 
 /**
  * 主题对「浮层菜单的外观」（设置→外观→菜单毛玻璃）的态度。
