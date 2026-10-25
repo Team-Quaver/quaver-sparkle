@@ -188,16 +188,6 @@ export const ELEVATION = {
   dark: Object.fromEntries([1, 2, 3, 4, 5].map((lv) => [lv, elevLevel("dark", lv as 1)])),
 } as Record<"light" | "dark", Record<1 | 2 | 3 | 4 | 5, string>>;
 
-/**
- * 播放页封面的「悬浮」投影：几何沿用宿主（0 20px 60px 那一档大范围软影 + 一层贴地硬影），
- * 颜色换成 Tint 派生。深色下这两层是**唯一能读出来的层级**，也是「播放有影 / 暂停无影」
- * 那条特效在本主题里看得见的前提（开关本身仍归宿主的 .np.playing 管，主题只换颜色）。
- */
-export const COVER_ELEVATION = {
-  light: `0 20px 60px ${shadowColor(24, 12, 0.4)}, 0 6px 18px ${shadowColor(18, 10, 0.3)}`,
-  dark: `0 20px 60px ${shadowColor(34, 46, 0.55)}, 0 6px 18px ${shadowColor(26, 36, 0.5)}`,
-} as const;
-
 /** M3 状态层不透明度（叠在组件自身表面色之上的 on-* 覆盖量）。 */
 export const STATE = { hover: 0.08, focus: 0.1, pressed: 0.1, drag: 0.16 } as const;
 

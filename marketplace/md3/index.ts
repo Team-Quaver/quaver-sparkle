@@ -15,7 +15,7 @@
 //   · 主题声明了 tint=presets，就**不能再写 --cvg-***（那是宿主地盘，写了也被行内样式压掉）。
 //     源色只能**读**。
 import { definePlugin } from "../../sdk/index";
-import { COVER_ELEVATION, ELEVATION, SHAPE, STATE, TINT_PRESETS, schemeDecls, type SchemeName } from "./tokens";
+import { ELEVATION, SHAPE, STATE, TINT_PRESETS, schemeDecls, type SchemeName } from "./tokens";
 
 /**
  * 源色取自哪个宿主变量 —— 这里有个必须绕开的环，别随手改回 --cvg-accent：
@@ -40,7 +40,7 @@ function schemeBlock(scheme: SchemeName, indent: string): string {
   const elev = Object.entries(ELEVATION[scheme]).map(([lv, v]) => `${indent}--md-elev-${lv}: ${v};`);
   // cover = 播放页封面那一档大软影（几何沿宿主，颜色由 Tint 派生）：跟五档层级同进同退，
   // 所以一并发进方案块。
-  return [...roles, ...elev, `${indent}--md-elev-cover: ${COVER_ELEVATION[scheme]};`].join("\n");
+  return [...roles, ...elev].join("\n");
 }
 
 /** 与方案无关的静态刻度（形状 / 状态层）。 */
@@ -280,124 +280,8 @@ const COMPONENTS = `
   }
 `;
 
-/**
- * 正在播放 / Flowscape 的可选接管。
- *
- * 宿主默认页和 Flowscape 都铺在 .np 上：默认页自带深色玻璃，Flowscape 则直接借这层
- * 背景。这里的开关就是把「主题要不要越过这层默认视觉」拆出来 —— 关闭时保持
- * Quaver Design 的原版封面氛围；开启后统一用当前明暗方案的 M3 surface。
- */
-const NP_OVERRIDES = `
-  &[data-md3-np="on"] .np {
-    background: var(--md-surface);
-    /* 封面氛围层只服务原来的深色玻璃；接管后关掉它，避免 M3 表面底下漏出随机封面色 */
-    & .np-bg { opacity: 0 !important; }
-    & .np-scrim { background: transparent; }
-    /* 封面那块「悬浮感」= 宿主的投影（几何在 style.css 的 .np-cover-wrap::before，
-       播放/暂停那下开关也是它的 .np.playing → opacity）。本主题只换**颜色**：
-       深色方案下表面只有 tone 6，比它更黑的东西画不出差别 —— 沿用 #0006 的结果是
-       「暂停/播放没有阴影特效」（现象是这条特效整条看不见，不是宿主没做）。 */
-    & .np-cover-wrap::before { box-shadow: var(--md-elev-cover); }
-    /* 默认页的标题 / 歌词沿用白字口径；换成 M3 on-surface 才能在浅色方案下读清 */
-    & .np-title, & .np-ly-line, & .np-ly-line.cur { color: var(--md-on-surface); }
-    & .np-artist { color: var(--md-on-surface-variant); }
-    & .np-ly-empty { color: color-mix(in srgb, var(--md-on-surface) 62%, transparent); }
-    /* 页内菜单从「恒深色玻璃」改回 M3 的 elevation 表面，与全站菜单一致 */
-    --menu-surface: var(--md-surface-container-high);
-    --menu-line: var(--md-outline-variant);
-    & .np-menu-item, & .np-menu-sub-btn, & .np-menu-switch, & .np-menu-size, & .np-menu-size button { color: var(--md-on-surface); }
-    & .np-menu-empty, & .np-size-val { color: var(--md-on-surface-variant); }
-    & .np-menu-item:hover:not(:disabled),
-    & .np-menu-sub-btn:hover,
-    & .np-menu-switch:hover,
-    & .np-menu-size:hover,
-    & .np-menu-size button:hover:not(:disabled) {
-      color: var(--md-on-surface);
-      background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-    }
-    /* Flowscape 歌词与当前 surface 配对：主题色扫字，纯色表面不需要景深阴影。
-       变量落在 .np 上，避免插件加载顺序影响覆盖；行级与逐字共用同一前景色。 */
-    --fs-lyric-color: var(--md-on-surface);
-    --fs-lyric-unsung: color-mix(in srgb, var(--md-on-surface) 62%, transparent);
-    --fs-lyric-highlight: var(--md-primary);
-    --fs-lyric-shadow: none;
-    --fs-lyric-filter: none;
-    --fs-lyric-translation-shadow: none;
-    /* Flowscape 主要信息层 */
-    & .fs-title { color: var(--md-on-surface); }
-    & .fs-artist { color: color-mix(in srgb, var(--md-on-surface) 82%, transparent); }
-    & .fs-album { color: color-mix(in srgb, var(--md-on-surface) 64%, transparent); }
-    & .fs-ly-empty { color: color-mix(in srgb, var(--md-on-surface) 58%, transparent); }
-    & .fs-iconbtn { color: color-mix(in srgb, var(--md-on-surface) 84%, transparent); }
-    & .fs-qbtn { color: color-mix(in srgb, var(--md-on-surface) 88%, transparent); border-color: var(--md-outline-variant); }
-    & .fs-pop { background: var(--md-surface-container-high); border-color: var(--md-outline-variant); }
-    & .fs-qi, & .fs-mrow { color: color-mix(in srgb, var(--md-on-surface) 88%, transparent); }
-    & .fs-qi:hover, & .fs-mrow:hover { color: var(--md-on-surface); background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
-  }
-
-  /* 颜色固定 = 随主题设置：M3 surface 本身已带明暗两套角色 */
-  &[data-md3-np="on"] .np {
-    background: var(--md-surface);
-
-    /* —— 逐字歌词（内置 AMLL）在这一档 surface 上必须整体翻面 ——
-       AMLL 的默认口径是「文字给底色**加光**」：播放器根元素带 mix-blend-mode:
-       plus-lighter，宿主又把墨色写成掺白的亮色（--amll-lp-color = accent 55% + 白 45%）。
-       本页原本恒为「模糊封面 + 深色遮罩」，两条都成立；换成 M3 surface 之后，浅色方案就是
-       往近白的底色上加光 —— 歌词整层洗白（实测：已唱 2.6 / 未唱 1.2 / 翻译 1.4，等于这页
-       没有歌词）。逐字正是这一页的主角，所以三处一起改：
-         · 混合归 normal —— 不再靠加光（桌面歌词窗早就这么处置，口径见 desktop-lyrics.css）；
-         · 墨色吃 on-surface 家族再掺一点主色 —— 浅底落深色、深底落亮色，tone 由角色表保证；
-         · 深色页那层 text-shadow 收掉（浅底下它只让字发糊，同 --fs-lyric-shadow 的道理）。
-       ⚠️ 深色方案也在这一档：plus-lighter 在近黑底上「看着还行」是加减法出来的偶然结果，
-          底色一换（换 Tint / 换档位）观感就漂 —— 归 normal 才是可预测的渲染。 */
-    & .np-kara-host {
-      color: var(--md-on-surface);
-      --amll-lp-color: color-mix(in srgb, var(--md-primary) 55%, var(--md-on-surface));
-      --amll-lp-hover-bg-color: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-      text-shadow: none;
-    }
-    & .np-kara-host .amll-lyric-player { mix-blend-mode: plus-lighter; }
-    /* AMLL 的「未唱 = 更低 alpha」「辅助行 = opacity .3」同样是自发光思路：只减光、不降色。
-       深色底上还能读，浅色底上直接掉到可读性以下 —— 而未唱那半句和翻译行恰恰是逐字歌词要读
-       的内容，于是把浓度抬到浅色也站得住的一档（未唱 .4 → .65，辅助行 .3 → .7）。
-       ⚠️ 类名来自 AMLL 的 CSS Modules（前缀随构建变），所以按 [class*="…"] 子串匹配：
-       真哪天改名，这里静默不生效 = 退回引擎原本的雾化档，字还在，只是淡。 */
-    & .np-kara-host [class*="lyricLineWrapper"] { --bright-mask-alpha: 1; --dark-mask-alpha: .65; }
-    & .np-kara-host [class*="lyricSubLine"] { opacity: .7; }
-
-    /* 行级回退列表（没有逐字数据时走这条路）：当前句也摘掉深色页投影 */
-    & .np-ly-line.cur { text-shadow: none; }
-
-    /* 音质胶囊 / ⋮ 按钮 / 音频流信息浮窗：宿主把这三处钉成「恒深色玻璃 + 白字」，
-       在这档浅底上等于整块隐形。菜单文字在上面的 on 块已经翻面，这里补齐其余消费点。 */
-    & .np-qpill {
-      background: var(--md-surface-container-high); border-color: var(--md-outline-variant);
-      color: var(--md-on-surface-variant);
-    }
-    & .np-qpill:hover, & .np-qpill.open {
-      background: var(--md-surface-container-highest); border-color: var(--md-outline);
-      color: var(--md-on-surface);
-    }
-    & .np-more { color: var(--md-on-surface-variant); }
-    & .np-more:hover {
-      background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-      color: var(--md-on-surface);
-    }
-    & .np-qinfo { color: var(--md-on-surface); }
-    & .qi-title { color: var(--md-on-surface-variant); border-bottom-color: var(--md-outline-variant); }
-    & .qi-title .qi-tier, & .qi-row { color: var(--md-on-surface); }
-    & .qi-row span, & .qi-empty { color: var(--md-on-surface-variant); }
-    & .np-menu-opt.sel {
-      background: var(--md-secondary-container);
-      color: var(--md-on-secondary-container);
-    }
-    & .np-menu-opt:focus-visible { outline-color: var(--md-on-surface); }
-    /* 封面占位底（无封面 / 还在加载那一块）：宿主的 #ffffff14 是「深色底上的微亮」，
-       浅底上等于没画 —— 交给 container，占位图标走 on-surface-variant */
-    & .np-cover { background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
-  }
-
-`;
+/* 正在播放页 / Flowscape 不再接管：宿主默认的深色封面氛围（Quaver Design）是这一页
+   的既定口径，AMLL 的 plus-lighter 自发光歌词也依赖深底。Lumen 只改常规界面表面。 */
 
 /** 组装整份主题 CSS。 */
 function buildCss(): string {
@@ -425,15 +309,13 @@ ${schemeBlock("dark", "    ")}
   /* ===== 组件形态 ===== */
 ${COMPONENTS}
 
-  /* ===== 正在播放 / Flowscape 接管 ===== */
-${NP_OVERRIDES}
 `;
 }
 
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.4.0",
+  version: "1.5.0",
   minHostVersion: "1.7.0",
   allowBeta: true,
   kind: "third-party",
@@ -442,17 +324,6 @@ export default definePlugin({
   // category 是安装元数据，只属于 plugin.json（设置页据此把已装内容归入主题/插件/扩展）。
   description: "一款复刻 Material You 设计的主题插件",
   setup(ctx) {
-    // 接管开关以 html dataset 暴露给主题 CSS：读 storage 初始化，设置页点击即时改。
-    // 默认关：正在播放页是宿主的门面，保持 Quaver Design 的原版布局与封面氛围；
-    // 用户明确选择 Lumen 接管后再换成 M3 surface（配色固定随主题明暗方案）。
-    const npOn = () => ctx.storage.get("np") === "on";
-    const syncNpDataset = () => {
-      if (typeof document === "undefined") return;
-      document.documentElement.dataset.md3Np = npOn() ? "on" : "off";
-      document.documentElement.dataset.md3NpColor = "theme";
-    };
-    syncNpDataset();
-
     ctx.registerTheme({
       id: "md3",
       name: "Lumen 流光",
@@ -475,33 +346,12 @@ export default definePlugin({
       title: "主题设置",
       render(box) {
         box.innerHTML = `
-          <div class="set-label">是否介入正在播放页/Flowscape</div>
-          <div class="opt-cards">
-            <button class="opt-card" data-np="on" type="button">开启</button>
-            <button class="opt-card" data-np="off" type="button">关闭</button>
-          </div>
-          <p class="muted set-hint">默认关闭，保留正在播放页与 Flowscape 原有的深色封面氛围；开启后 Lumen 会统一它们的表面色。</p>
-
-          <p class="muted set-hint" style="margin-top:10px">接管后正在播放页与 Flowscape 使用当前 Lumen 明暗方案的 M3 表面。</p>
-
           <div class="set-label" style="margin-top:14px">歌单显示</div>
           <div class="opt-cards">
             <button class="opt-card sel" data-pl-mode="collection" type="button" disabled>歌单集合页（Lumen 强制）</button>
           </div>
           <p class="muted set-hint">Lumen 把侧栏让给导航：歌单不在侧栏列出，改到「歌单」集合页以 grid 分区展示。设置 → 外观 → 歌单 由主题接管、自动禁用。</p>`;
 
-        const npCards = [...box.querySelectorAll<HTMLButtonElement>("[data-np]")];
-        const sync = () => {
-          npCards.forEach((b) => b.classList.toggle("sel", (b.dataset.np === "on") === npOn()));
-        };
-        npCards.forEach((b) => {
-          b.onclick = () => {
-            ctx.storage.set("np", b.dataset.np === "on" ? "on" : "off");
-            syncNpDataset();
-            sync();
-          };
-        });
-        sync();
       },
     });
   },

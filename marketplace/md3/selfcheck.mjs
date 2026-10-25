@@ -28,8 +28,9 @@ registerHooks({
   },
 });
 
-const { COVER_ELEVATION, ELEVATION, LIGHT_ROLES, DARK_ROLES, SHAPE, SHADOW_COLORS, STATE, TINT_PRESETS } = await import("./tokens.ts");
+const { ELEVATION, LIGHT_ROLES, DARK_ROLES, SHAPE, SHADOW_COLORS, STATE, TINT_PRESETS } = await import("./tokens.ts");
 const { default: plugin } = await import("./index.ts");
+const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
 let failed = 0;
 function ok(name, cond, extra = "") {
@@ -90,8 +91,6 @@ const notTint = Object.entries(ELEVATION).flatMap(([sch, t]) => Object.entries(t
   .filter(([, v]) => !/lch\(from var\(--md-source\)/.test(v) || /rgba\(\s*0\s*,\s*0\s*,\s*0/.test(v))
   .map(([lv]) => sch + "." + lv));
 ok("每一级投影都由 --md-source 派生（且不含纯黑）", notTint.length === 0, notTint.join(", "));
-ok("封面投影（cover 档）两套方案齐备且同样 Tint 派生",
-  ["light", "dark"].every((s) => /lch\(from var\(--md-source\)/.test(COVER_ELEVATION[s]) && COVER_ELEVATION[s].split(",").length === 2));
 ok("contact / ambient 两层颜色齐备（浅色由 contact 撑，深色只有 ambient 看得见）",
   ["light", "dark"].every((s) => ["contact", "ambient"].every((k) => /lch\(from var\(--md-source\)/.test(SHADOW_COLORS[s][k]))));
 ok("状态层四档齐备（hover/focus/pressed/drag）", ["hover", "focus", "pressed", "drag"].every((k) => typeof STATE[k] === "number"));
@@ -125,7 +124,7 @@ ok("Tint 方案包含封面颜色哨兵档", theme?.tint?.presets?.some((p) => p
 ok("不声明 menus（接管菜单）；背景交回宿主且不锁呈现风格（跟随用户偏好）",
   theme?.menus === undefined && theme?.background?.mode === "host" && theme?.background?.renderer === undefined);
 ok("插件 kind = third-party", plugin.kind === "third-party");
-ok("主题设置区注册成功（正在播放 / Flowscape 接管开关）",
+ok("主题设置区注册成功（正在播放 / Flowscape 固定 Quaver Design，不提供接管开关）",
   settingsSection?.id === "md3-theme" && settingsSection?.title === "主题设置");
 // SDK 的 SparklePlugin 只有 id/name/version/kind/author/description/setup —— 多写一个字段
 // 会被 TS 的 excess-property 检查直接判死（TS2353）。category/main 是**安装元数据**，
@@ -209,26 +208,9 @@ ok("搜索页标题与 Tag 栏有独立气口（不吃全局 20px 行高 / 旧 4
 
 
 // —— 9e. 正在播放页：封面投影换色 + 逐字歌词在 M3 surface 上必须翻面 ——
-ok("接管态把封面投影换成 --md-elev-cover（几何与播放/暂停开关仍归宿主，主题只换颜色）",
-  /& \.np-cover-wrap::before \{[^}]*box-shadow:\s*var\(--md-elev-cover\)/.test(noComments));
-ok("接管态关掉 AMLL 的加光混合（浅色 surface 上 plus-lighter = 白字白底 = 整层歌词消失）",
-  /& \.np-kara-host \.amll-lyric-player \{[^}]*mix-blend-mode:\s*normal/.test(noComments));
-ok("接管态歌词墨色走 on-surface 家族（掺主色保色相）并摘掉深色页的 text-shadow",
-  /& \.np-kara-host \{[^}]*color:\s*var\(--md-on-surface\)/.test(noComments) &&
-  /--amll-lp-color:\s*color-mix\(in srgb, var\(--md-primary\)[^;]*var\(--md-on-surface\)/.test(noComments) &&
-  /& \.np-kara-host \{[^}]*text-shadow:\s*none/.test(noComments));
-ok("未唱遮罩与辅助行浓度抬到浅色读得出的一档（.65 / .7；按 [class*=…] 匹配 AMLL 的 CSS Modules 名）",
-  /\[class\*="lyricLineWrapper"\] \{[^}]*--dark-mask-alpha:\s*\.65/.test(noComments) &&
-  /\[class\*="lyricLineWrapper"\] \{[^}]*--bright-mask-alpha:\s*1/.test(noComments) &&
-  /\[class\*="lyricSubLine"\] \{[^}]*opacity:\s*\.7/.test(noComments));
-ok("浅底会隐形的三处控件都翻了面（音质胶囊 / ⋮ 按钮 / 音频流信息浮窗）",
-  /& \.np-qpill \{[^}]*color:\s*var\(--md-on-surface-variant\)/.test(noComments) &&
-  /& \.np-more \{[^}]*--md-on-surface-variant/.test(noComments) &&
-  /& \.np-qinfo \{[^}]*--md-on-surface/.test(noComments) &&
-  /& \.qi-row span, & \.qi-empty \{[^}]*--md-on-surface-variant/.test(noComments));
-ok("接管颜色固定随主题设置（只吃 on/off，没有第二档颜色）",
-  /&\[data-md3-np="on"\] \.np/.test(noComments) &&
-  !/\[data-md3-np-color="(?!theme)/.test(noComments));
+ok("正在播放页 / Flowscape 固定 Quaver Design：不再写接管选择器、开关与 data-md3-np",
+  !/data-md3-np|data-np=|--amll-lp-color/.test(noComments) &&
+  !/是否介入正在播放/.test(source));
 
 ok("满幅：.body 去掉了外距与间距",
   /& \.body\s*\{(?=[^}]*padding:\s*0)(?=[^}]*gap:\s*0)/.test(noComments));
@@ -368,7 +350,7 @@ try {
     const H = rgbToLch(anyColor(toBarColors(anyColor(preset.color)).line)).H;
     for (const [scheme, table] of [["light", LIGHT_ROLES], ["dark", DARK_ROLES]]) {
       const bg = lchToRgb(table.surface.tone, table.surface.chroma, H);
-      const specs = [...[1, 2, 3, 4, 5].map((lv) => ELEVATION[scheme][lv]), COVER_ELEVATION[scheme]];
+      const specs = [1, 2, 3, 4, 5].map((lv) => ELEVATION[scheme][lv]);
       for (const spec of specs) {
         const layers = [...spec.matchAll(LAYER_RE)].map((m) => {
           const mixed = overC(lchToRgb(+m[1], +m[2], H), +m[3], bg);
@@ -382,7 +364,7 @@ try {
   for (const scheme of ["light", "dark"]) {
     const rs = shadowReport[scheme];
     const worst = rs.reduce((a, b) => (b.best < a.best ? b : a));
-    ok(`${scheme}: 每一级投影（含封面档）压在同方案 surface 上都看得见（最强层对比 ≥ 1.12）`,
+    ok(`${scheme}: 每一级投影压在同方案 surface 上都看得见（最强层对比 ≥ 1.12）`,
       worst.best >= 1.12, `最低 ${worst.best.toFixed(3)}（${worst.id}）`);
   }
   const dull = shadowReport.dark.filter((r) => r.chroma < 6);

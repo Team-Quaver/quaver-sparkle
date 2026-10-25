@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Lumen 正在播放页回归（ui/scripts/verify-lumen-np.ts）的变异负向测试。
 
-selfcheck.mutate.py 只能证明「CSS 字符串还在」；浅色歌词到底读不读得出、封面投影到底
-看不看得见，是浏览器里算出来的 —— 所以那批断言也要各配一个「改坏 → 必须报红 → 还原」：
-把插件源码临时改成错误版本 → 重新打包 → 跑真浏览器回归 → 期望非零退出且报的是**对应**那条
-→ 还原并校验 sha256 与改前一致（顺手证明 dist 里那份是被还原后的构建覆盖的）。
+曾经用于主题化播放页的浅色歌词 / 封面投影回归：改坏插件源码 → 重新打包 → 跑真浏览器
+回归 → 期望非零退出 → 还原并校验 sha256。当前口径是 Lumen 不接管正在播放页，保留
+流程骨架。
 
 跑法：cd vendor/Sparkle/marketplace/md3 && python3 np-mutate.py
 （慢，约十几次 esbuild + 无头 Chrome；改动 verify-lumen-np.ts 的断言后跑一遍。）
@@ -41,52 +40,9 @@ def verify() -> tuple[int, str]:
 originals = {f: (PLUGIN / f).read_bytes() for f in FILES}
 hashes = {f: sha(PLUGIN / f) for f in FILES}
 
-# (说明, 文件, 原文, 替换文, 期望报红的断言关键词)
-MUTATIONS = [
-    ("留着 AMLL 的 plus-lighter 加光混合（浅色 surface 上歌词洗白）", "index.ts",
-     "    & .np-kara-host .amll-lyric-player { mix-blend-mode: normal; }\n", "",
-     "AMLL 仍在 plus-lighter 混合"),
-    ("歌词墨色退回宿主那套掺白亮色", "index.ts",
-     "--amll-lp-color: color-mix(in srgb, var(--md-primary) 55%, var(--md-on-surface));",
-     "--amll-lp-color: color-mix(in srgb, var(--md-primary) 55%, #fff);",
-     "已唱部分对比"),
-    ("未唱遮罩 / 辅助行浓度不抬（引擎的自发光档位留在浅色页上）", "index.ts",
-     '    & .np-kara-host [class*="lyricLineWrapper"] { --bright-mask-alpha: 1; --dark-mask-alpha: .65; }\n'
-     '    & .np-kara-host [class*="lyricSubLine"] { opacity: .7; }\n', "",
-     "未唱部分对比"),
-    ("歌词留着深色页的 text-shadow", "index.ts",
-     "      text-shadow: none;\n", "",
-     "接管态歌词还挂着深色页的 text-shadow"),
-    ("封面不换成 Tint 派生投影（沿用宿主那条 rgba(0,0,0,.4)）", "index.ts",
-     "    & .np-cover-wrap::before { box-shadow: var(--md-elev-cover); }\n", "",
-     "封面投影不是 Tint 派生的 lch()"),
-    # 写成「合法形状但没浓度」的灰：字符串检查放行，深色像素那把尺必须把它拦下 ——
-    # 这条才是「投影改回近黑」在浏览器层的等价回归（rgba(0,0,0,…) 那种写法由 selfcheck 拦，
-    # 它连 lch(from var(--md-source)) 的形状都不满足，早就红了，轮不到这里）。
-    ("深色封面档洗成无彩灰（形状仍是 Tint 派生，但 tone 6 底上没差别）", "tokens.ts",
-     "  dark: `0 20px 60px ${shadowColor(34, 46, 0.55)}, 0 6px 18px ${shadowColor(26, 36, 0.5)}`,",
-     "  dark: `0 20px 60px ${shadowColor(7, 0, 0.5)}, 0 6px 18px ${shadowColor(6, 0, 0.4)}`,",
-     "封面投影看不出差别"),
-    ("投影颜色不跟源色（写死一个色相）", "tokens.ts",
-     "const shadowColor = (tone: number, chroma: number, alpha: number) =>\n"
-     "  `lch(from var(--md-source) ${tone} ${chroma} h / ${alpha})`;",
-     "const shadowColor = (tone: number, chroma: number, alpha: number) =>\n"
-     "  `lch(${tone} ${chroma} 300 / ${alpha})`;",
-     "投影色相不跟 Tint"),
-    ("播放/暂停的开关被主题改写（暂停也留影）", "index.ts",
-     "    & .np-cover-wrap::before { box-shadow: var(--md-elev-cover); }",
-     "    & .np-cover-wrap::before { box-shadow: var(--md-elev-cover); opacity: 1; }",
-     "暂停后投影没收回"),
-    ("浅底上的音质胶囊没翻面（白字压浅底）", "index.ts",
-     "      color: var(--md-on-surface-variant);\n    }\n    & .np-qpill:hover",
-     "      color: #fffb;\n    }\n    & .np-qpill:hover",
-     "音质胶囊文字对比"),
-    ("深空黑那态也吃浅色的歌词翻面（引擎默认口径被误伤）", "index.ts",
-     '&[data-md3-np="on"][data-md3-np-color="theme"] .np {',
-     '&[data-md3-np="on"] .np {',
-     "深空黑"),
-]
-
+# 正在播放页固定 Quaver Design 后没有可变异的主题化片段；保留骨架，未来重新引入
+# 主题化播放页时按「改坏 → 必须报红 → 还原」补回对应样例。
+MUTATIONS = []
 failures = []
 for label, fname, old, new, keyword in MUTATIONS:
     path = PLUGIN / fname
