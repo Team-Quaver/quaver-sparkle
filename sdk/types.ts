@@ -108,13 +108,22 @@ export interface SparkleThemeTint {
  * 环境色（当前曲封面 / 自定义图）整块不画 —— 否则用户的自定义壁纸会从主题的底色底下透出来，
  * 两边打架。同时把设置页的「背景」整组禁用并注明由谁接管。
  * 主题想自带背景就在自己的 `css` 里画（覆盖 `--bg`、或用伪元素铺整窗），那是你的地盘。
+ * 两者的语义一样（这层环境色都归宿主管），差别只在设置页的文案：`mode: "off"` 明确
+ * 写出「强制关闭背景」，适合自带完整视觉、连用户壁纸都不该透出来的主题。
  *
  * 声明了 = 主题把背景让给宿主：用户的三档与模糊强度照常生效（`--ambient-*` 归宿主写）。
  * 主题**不应**再自己铺整窗背景 —— 那会与用户在设置里选的东西打架。
  */
 export interface SparkleThemeBackground {
-  mode: "host";
-  /** 呈现风格（可选）：缺省 = 宿主用户偏好。见 SparkleBackgroundRenderer。 */
+  /**
+   * 主页环境色层的归属：`"host"` = 用户三档照常生效；`"off"` = 强制关闭
+   * （与缺省同语义，宿主整层不画，但设置页文案写「强制关闭」而非「由主题接管」）。
+   */
+  mode: "host" | "off";
+  /**
+   * 呈现风格（可选）：缺省 = 宿主用户偏好。见 SparkleBackgroundRenderer。
+   * 只在 `mode: "host"` 下生效 —— `off` 时没有这层可画，风格无从谈起。
+   */
   renderer?: SparkleBackgroundRenderer;
 }
 

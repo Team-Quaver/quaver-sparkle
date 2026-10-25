@@ -315,7 +315,7 @@ ${COMPONENTS}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.5.0",
+  version: "1.5.1",
   minHostVersion: "1.7.0",
   allowBeta: true,
   kind: "third-party",
@@ -335,10 +335,12 @@ export default definePlugin({
       // 歌单显示模式：Lumen 为侧栏让出空间 → 强制「歌单集合页」（侧栏不列歌单、导航垂直居中，
       // 歌单改到 #/playlists 以 grid 分区）。这是主题最终态，设置页「外观 → 歌单」那组会被禁用。
       playlistMode: { mode: "collection" },
-      // 背景交回宿主且不锁呈现风格：M3 角色只管界面表面，整窗底图跟随用户偏好。
+      // 强制关闭主页背景（M3 角色只管界面表面，封面/壁纸那层环境色不许从底下透出来），
+      // 歌词页呈现风格钉死为 Quaver Design（封面模糊铺底，与主题的 M3 表面同一套观感；
+      // AMLL 网格渐变会顶穿主题的 tonal surface）。设置页「外观 → 背景」整组随策略禁用。
       // menus 不声明 = 主题接管：菜单走 M3 elevation 面板（不透玻璃）。
       // Lumen 的播放条是满幅 bottom app bar，所以控制条停靠形态也由主题接管为 bottom。
-      background: { mode: "host" },
+      background: { mode: "off", renderer: "quaver" },
     });
 
     ctx.registerSettingsSection({
