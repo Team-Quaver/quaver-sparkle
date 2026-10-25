@@ -265,7 +265,7 @@ const COMPONENTS = `
   & .tint-field input, & .tint-hex-row input, & .qp-q { border-radius: var(--md-shape-xs); }
 
   /* —— 浮层：M3 菜单 4px —— */
-  & .ctx-menu, & .pb-qpop, & .pb-lpop, & .pb-volpop, & .np-menu, & .np-menu-sub-list, & .np-qinfo, & .tint-pop { border-radius: var(--md-shape-xs); }
+  & .ctx-menu, & .qtip, & .pb-qpop, & .pb-lpop, & .pb-volpop, & .np-menu, & .np-menu-sub-list, & .np-qinfo, & .tint-pop { border-radius: var(--md-shape-xs); }
 
   /* —— 对话框 / 提示条 —— */
   & .upd-dialog, & .sparkle-settings-dialog { border-radius: var(--md-shape-xl); box-shadow: var(--md-elev-3); }
@@ -433,7 +433,7 @@ ${NP_OVERRIDES}
 export default definePlugin({
   id: "md3",
   name: "Lumen 流光",
-  version: "1.3.9",
+  version: "1.4.0",
   minHostVersion: "1.7.0",
   allowBeta: true,
   kind: "third-party",
@@ -443,8 +443,9 @@ export default definePlugin({
   description: "一款复刻 Material You 设计的主题插件",
   setup(ctx) {
     // 接管开关以 html dataset 暴露给主题 CSS：读 storage 初始化，设置页点击即时改。
-    // 播放页颜色固定「随主题设置」：M3 surface 本身已带明暗两套角色，不再拆第二档。
-    const npOn = () => ctx.storage.get("np") !== "off";
+    // 默认关：正在播放页是宿主的门面，保持 Quaver Design 的原版布局与封面氛围；
+    // 用户明确选择 Lumen 接管后再换成 M3 surface（配色固定随主题明暗方案）。
+    const npOn = () => ctx.storage.get("np") === "on";
     const syncNpDataset = () => {
       if (typeof document === "undefined") return;
       document.documentElement.dataset.md3Np = npOn() ? "on" : "off";
@@ -463,10 +464,10 @@ export default definePlugin({
       // 歌单显示模式：Lumen 为侧栏让出空间 → 强制「歌单集合页」（侧栏不列歌单、导航垂直居中，
       // 歌单改到 #/playlists 以 grid 分区）。这是主题最终态，设置页「外观 → 歌单」那组会被禁用。
       playlistMode: { mode: "collection" },
-      // 背景交回宿主并固定 Quaver Design：M3 角色只管界面表面，整窗底图由宿主展示。
+      // 背景交回宿主且不锁呈现风格：M3 角色只管界面表面，整窗底图跟随用户偏好。
       // menus 不声明 = 主题接管：菜单走 M3 elevation 面板（不透玻璃）。
       // Lumen 的播放条是满幅 bottom app bar，所以控制条停靠形态也由主题接管为 bottom。
-      background: { mode: "host", renderer: "quaver" },
+      background: { mode: "host" },
     });
 
     ctx.registerSettingsSection({
@@ -479,7 +480,7 @@ export default definePlugin({
             <button class="opt-card" data-np="on" type="button">开启</button>
             <button class="opt-card" data-np="off" type="button">关闭</button>
           </div>
-          <p class="muted set-hint">开启后 Lumen 会统一正在播放页与 Flowscape 的表面色；关闭时保留它们原有的深色封面氛围。</p>
+          <p class="muted set-hint">默认关闭，保留正在播放页与 Flowscape 原有的深色封面氛围；开启后 Lumen 会统一它们的表面色。</p>
 
           <p class="muted set-hint" style="margin-top:10px">接管后正在播放页与 Flowscape 使用当前 Lumen 明暗方案的 M3 表面。</p>
 

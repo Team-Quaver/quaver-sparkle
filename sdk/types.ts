@@ -133,9 +133,9 @@ export type SparkleBackgroundRenderer = "quaver" | "mesh";
  *
  * 菜单玻璃由宿主的一组令牌统一给：`--menu-filter`（模糊）/ `--menu-surface`（底片）/
  * `--menu-line`（描边）/ `--menu-shadow`（阴影）/ `--menu-edge`（上缘内高光）。
- * 消费点七处 = `.ctx-menu`（侧栏歌单 / 歌曲右键菜单）、`.pb-qpop`（音质）、`.pb-lpop`
- * （播放模式）、`.pb-volpop`（音量）、`.np-menu`（正在播放页「更多操作」）、
- * `.np-qinfo`（音频流信息）、`.tint-pop`（设置页颜色选择器）。
+ * 消费点 = `.ctx-menu`（侧栏歌单 / 歌曲右键菜单 / 自绘下拉）、`.qtip`（自绘提示）、
+ * `.pb-qpop`（音质）、`.pb-lpop`（播放模式）、`.pb-volpop`（音量）、`.np-menu`（正在播放页
+ * 「更多操作」）、`.np-qinfo`（音频流信息）、`.tint-pop`（设置页颜色选择器）。
  *
  * **不声明**（`theme.menus` 缺省）= 主题自带菜单外观，自己接管。宿主**让位**：不再往
  * `<html>` 写 `data-menu-glass` 的 on/off，同时把设置页的「菜单毛玻璃」整组禁用并注明

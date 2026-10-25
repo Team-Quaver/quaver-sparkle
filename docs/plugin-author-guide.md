@@ -292,10 +292,10 @@ ctx.registerTheme({ id: "t2", name: "T2", css: `…`, background: { mode: "host"
 | **不写 `menus`**（默认） | 主题 | 宿主**让位**：不再往 `<html>` 写 `data-menu-glass` 的 on/off，设置页的「菜单毛玻璃」整组禁用并注明由你接管。你在 `css` 里覆盖那几个 `--menu-*` 令牌即可 —— `html[data-sparkle-theme="<id>"]` 的特异性本来就高于 `:root` |
 | `menus: { mode: "host" }` | 用户 | 用户那棵开关照常生效。你就**别**再写 `--menu-*` 了 —— 写了会被开关盖掉 |
 
-消费这套令牌的七处菜单（想直接按选择器重画形态就用这些类名）：`.ctx-menu`（侧栏歌单 /
-歌曲右键菜单）、`.pb-qpop`（音质）、`.pb-lpop`（播放模式）、`.pb-volpop`（音量）、
-`.np-menu`（正在播放页「更多操作」）、`.np-qinfo`（音频流信息）、`.tint-pop`（设置页颜色
-选择器）。注意`.np`（正在播放页）对同名令牌另有一套深色值，想连那一页一起改就写
+消费这套令牌的浮层（想直接按选择器重画形态就用这些类名）：`.ctx-menu`（侧栏歌单 /
+歌曲右键菜单 / 自绘下拉）、`.qtip`（自绘提示）、`.pb-qpop`（音质）、`.pb-lpop`（播放模式）、
+`.pb-volpop`（音量）、`.np-menu`（正在播放页「更多操作」）、`.np-qinfo`（音频流信息）、
+`.tint-pop`（设置页颜色选择器）。注意`.np`（正在播放页）对同名令牌另有一套深色值，想连那一页一起改就写
 `html[data-sparkle-theme="<id>"] .np { --menu-surface: … }`。
 
 ```ts
