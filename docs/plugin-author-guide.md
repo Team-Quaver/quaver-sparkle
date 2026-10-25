@@ -266,7 +266,7 @@ output_path = "$XDG_CONFIG_HOME/quaver-music/system-theme.json"
 
 `background.renderer` 还能指定呈现风格（可选，只在 `mode: "host"` 时生效）：
 `"quaver"` = Quaver Design 的封面模糊铺底；`"mesh"` = AMLL MeshGradientRenderer
-的网格流动渐变（默认）。不写 = 跟随用户在设置里选的那套。
+的网格流动渐变。不写 = 跟随用户在设置里选的那套。
 
 ```ts
 // 1) 不写 background：主题自带背景（比如自己在 css 里铺一层渐变/纹样），宿主让位

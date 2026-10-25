@@ -122,7 +122,8 @@ ok("主题 id 与插件 id 一致", theme?.id === plugin.id && plugin.id === "md
 ok("tint 交给主题自带方案（presets）—— 这就是设置页的 Tint 入口", theme?.tint?.mode === "presets");
 ok("Tint 方案就是 token 表里那份（没在 index.ts 里另抄一份）", theme?.tint?.presets === TINT_PRESETS);
 ok("Tint 方案包含封面颜色哨兵档", theme?.tint?.presets?.some((p) => p.color === "cover") === true);
-ok("不声明 menus / background（缺省 = 主题接管）", theme?.menus === undefined && theme?.background === undefined);
+ok("不声明 menus（接管菜单）；背景交回宿主并固定 Quaver Design",
+  theme?.menus === undefined && theme?.background?.mode === "host" && theme?.background?.renderer === "quaver");
 ok("插件 kind = third-party", plugin.kind === "third-party");
 ok("主题设置区注册成功（正在播放 / Flowscape 接管开关）",
   settingsSection?.id === "md3-theme" && settingsSection?.title === "主题设置");

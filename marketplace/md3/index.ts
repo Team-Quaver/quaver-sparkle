@@ -463,9 +463,10 @@ export default definePlugin({
       // 歌单显示模式：Lumen 为侧栏让出空间 → 强制「歌单集合页」（侧栏不列歌单、导航垂直居中，
       // 歌单改到 #/playlists 以 grid 分区）。这是主题最终态，设置页「外观 → 歌单」那组会被禁用。
       playlistMode: { mode: "collection" },
-      // background / menus 都不声明 = 主题接管：
-      // 背景走纯 M3 surface（不铺封面环境色），菜单走 M3 elevation 面板（不透玻璃）。
+      // 背景交回宿主并固定 Quaver Design：M3 角色只管界面表面，整窗底图由宿主展示。
+      // menus 不声明 = 主题接管：菜单走 M3 elevation 面板（不透玻璃）。
       // Lumen 的播放条是满幅 bottom app bar，所以控制条停靠形态也由主题接管为 bottom。
+      background: { mode: "host", renderer: "quaver" },
     });
 
     ctx.registerSettingsSection({
