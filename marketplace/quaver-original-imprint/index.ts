@@ -167,6 +167,11 @@ body:has(> .ambient:is([data-mode="cover"], [data-mode="custom"])) .sidebar {
   backdrop-filter: var(--shell-filter);
 }
 
+body:has(> .ambient:is([data-mode="cover"], [data-mode="custom"])):has(:is(#side-collapse, .content-top .top-back):hover) .qtip {
+  background: color-mix(in srgb, var(--menu-surface) 85%, var(--card));
+  backdrop-filter: none;
+}
+
 body:has(> .ambient:is([data-mode="cover"], [data-mode="custom"])) .sb-field {
   background: transparent;
 }
@@ -216,10 +221,8 @@ body:has(> .ambient:is([data-mode="cover"], [data-mode="custom"])) .content.has-
   }
 }
 
-.content-top .sb-field {
-  border-radius: 10px;
-  background: var(--pill);
-  box-shadow: none;
+.content-top .searchbar {
+  inset-inline-start: -8px;
 }
 
 .sb-field > .sb-icon {
@@ -238,10 +241,13 @@ body:has(> .ambient:is([data-mode="cover"], [data-mode="custom"])) .content.has-
   pointer-events: none;
 }
 
-.content-top .top-back,
-.content-top .top-back:hover {
+.content-top .top-back {
   border: 0;
   background: transparent;
+}
+
+.content-top .top-back:not([hidden]):hover {
+  background: var(--hover);
 }
 
 .content-top .top-back svg {
@@ -458,6 +464,10 @@ body:has(> .ambient:is([data-mode="cover"], [data-mode="custom"])) .content.has-
   background: var(--hover);
 }
 
+.route .sticky-bar.stuck .sticky-bar__lead {
+  margin-inline-start: 8px;
+}
+
 /* Keep the native sticky toolbar and reuse its play button in the cover area. */
 @media (min-width: 1050px) {
   .content {
@@ -607,6 +617,16 @@ body[data-control-bar="bottom"]:has(.qq-progress) .body > :is(.content, .side-re
   margin-bottom: var(--control-bar-slot);
 }
 
+body[data-control-bar="floating"]:not(:has(> .np.open)) .player {
+  border-color: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body[data-control-bar="bottom"] .player {
+    transition: margin-inline-start .34s cubic-bezier(.32, .72, .24, 1);
+  }
+}
+
 body[data-control-bar="bottom"]:not(:has(> .np.open)) .player {
   margin-inline-start: calc(var(--side-w, 216px) + 20px);
 }
@@ -633,6 +653,17 @@ body[data-control-bar="bottom"].side-collapsed:not(:has(> .np.open)) .player {
 
 .player:has(.qq-progress) .pb-left .now {
   line-height: 1.35;
+}
+
+.player:has(.qq-progress) .pb-left .now .s {
+  margin-block-start: 3px;
+}
+
+@media (width > 860px) {
+  .player:has(.qq-progress) .pb-left .now {
+    position: relative;
+    inset-block-start: 1.5px;
+  }
 }
 
 .player:has(.qq-progress) .pb-mid {
@@ -843,6 +874,7 @@ body:not(.ssd) .np.open .np-drag {
 
 .np .np-kara-host {
   --amll-lp-color: var(--qq-unplayed-lyric);
+  text-shadow: none;
 }
 
 .np .np-kara-host .amll-lyric-player {
@@ -884,6 +916,11 @@ body:not(.ssd) .np.open .np-drag {
 /* AMLL applies its distance blur inline. Keep neighboring lyrics readable. */
 .np .np-kara-host [class*="lyricLineWrapper"] {
   filter: none !important;
+}
+
+/* Keep the wrapper's animated position and render the lyric line at its natural size. */
+.np .np-kara-host [class*="_lyricLine"]:has(> [class*="_lyricMainLine"]):not([class*="_lyricBgLine"]) {
+  transform: none !important;
 }
 
 .np .np-kara-host .amll-lyric-player [class*="lyricLineWrapper"] {
@@ -1510,91 +1547,65 @@ function mountPlaybackAppearance(page) {
 export default {
   id: themeId,
   name,
-  version: "0.1.68",
+  version: "0.1.81",
   minHostVersion: "1.7.0",
   kind: "third-party",
   description: "原印象，复刻熟悉的桌面音乐播放器外观。",
   setup(ctx) {
-    ctx.registerThemePack({
+    ctx.registerTheme({
       id: themeId,
       name,
-      preview: [playGreen, textGreen, "#f6f6f6", "#1e1e20"],
-      variants: [{ id: "light", name, css: themeCss }],
+      css: "",
+      tint: { mode: "host" },
+      background: { mode: "host" },
+      menus: { mode: "host" },
+      controlBar: { mode: "host" },
+      playlistMode: { mode: "host" },
     });
 
-    let disposeProgress;
-    let disposeLikedAlbums;
-    let disposePlaybackAppearance;
-    let tintOption;
-    let disposeStickyClip;
-    let disposePlaylistActions;
+    const root = document.documentElement;
+    let disposeAppearance;
     const isGreen = () => ctx.storage.get("highlight") !== "host";
-    const applyHighlight = active => {
-      document.documentElement.toggleAttribute("data-original-imprint-green", active && isGreen());
-    };
-    const setGreen = enabled => {
-      ctx.storage.set("highlight", enabled ? "green" : "host");
-      applyHighlight(true);
-      tintOption?.sync();
-    };
     const syncTheme = () => {
-      const { packId, variantId, suspended } = ctx.style.state();
-      // Unregistering the pack also clears the host's selection. Keep that
-      // distinct from a user switching to the default appearance.
-      if (ctx.style.packs().some(pack => pack.id === themeId)) {
-        if (packId === themeId) {
-          if (ctx.storage.get("selected") !== "1") ctx.storage.set("selected", "1");
-        } else if (ctx.storage.get("selected") === "1") {
-          ctx.storage.remove("selected");
-        }
-      }
-      const active = packId === themeId && !suspended;
-      applyHighlight(active);
-      if (!active) {
-        disposeProgress?.();
-        disposeProgress = undefined;
-        disposeLikedAlbums?.();
-        disposeLikedAlbums = undefined;
-        disposePlaybackAppearance?.();
-        disposePlaybackAppearance = undefined;
-        tintOption?.dispose();
-        tintOption = undefined;
-        disposeStickyClip?.();
-        disposeStickyClip = undefined;
-        disposePlaylistActions?.();
-        disposePlaylistActions = undefined;
+      if (root.dataset.sparkleTheme !== themeId) {
+        disposeAppearance?.();
+        disposeAppearance = undefined;
         return;
       }
-      if (variantId !== "light") {
-        ctx.style.activate(themeId, "light");
-        return;
-      }
+      if (disposeAppearance) return;
+
+      const removeStyles = ctx.style.register({ id: themeId, css: themeCss, order: 1000 });
+      const applyHighlight = () => root.toggleAttribute("data-original-imprint-green", isGreen());
+      applyHighlight();
+
       const bar = document.getElementById("player-bar");
-      if (bar && !disposeProgress) disposeProgress = mountProgress(bar);
       const route = document.getElementById("route");
-      if (route && !disposeLikedAlbums) disposeLikedAlbums = mountLikedAlbums(route, ctx.log);
-      if (route && !tintOption) tintOption = mountTintOption(route, isGreen, setGreen);
-      if (route && !disposeStickyClip) disposeStickyClip = mountStickyClip(route);
-      if (route && !disposePlaylistActions) disposePlaylistActions = mountPlaylistActions(route);
-      tintOption?.sync();
       const page = document.querySelector("body > .np");
-      if (page && !disposePlaybackAppearance) disposePlaybackAppearance = mountPlaybackAppearance(page);
+      const tintOption = route && mountTintOption(route, isGreen, enabled => {
+        ctx.storage.set("highlight", enabled ? "green" : "host");
+        applyHighlight();
+        tintOption?.sync();
+      });
+      const cleanup = [
+        bar && mountProgress(bar),
+        route && mountLikedAlbums(route, ctx.log),
+        route && mountStickyClip(route),
+        route && mountPlaylistActions(route),
+        page && mountPlaybackAppearance(page),
+      ];
+      disposeAppearance = () => {
+        for (const dispose of cleanup) dispose?.();
+        tintOption?.dispose();
+        root.removeAttribute("data-original-imprint-green");
+        removeStyles();
+      };
     };
-    const stop = ctx.style.onChange(syncTheme);
-    const initial = ctx.style.state();
-    if (!initial.packId && !initial.suspended && ctx.storage.get("selected") === "1") {
-      ctx.style.activate(themeId, "light");
-    }
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-sparkle-theme"] });
     syncTheme();
     return () => {
-      stop();
-      disposeProgress?.();
-      disposeLikedAlbums?.();
-      disposePlaybackAppearance?.();
-      tintOption?.dispose();
-      disposeStickyClip?.();
-      disposePlaylistActions?.();
-      applyHighlight(false);
+      observer.disconnect();
+      disposeAppearance?.();
     };
   },
 };
