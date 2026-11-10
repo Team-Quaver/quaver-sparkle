@@ -1,0 +1,238 @@
+/* Folia 歌词动效 —— plugin chrome (toolbar, picker, transport). Shadow DOM only. */
+.fvr {
+    position: absolute;
+    inset: 0;
+    color: #fff;
+    font-family: var(--font-ui, "Noto Sans CJK SC", system-ui, sans-serif);
+    -webkit-font-smoothing: antialiased;
+}
+
+.fvr-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--top-band-h, 42px);
+    z-index: 20;
+    -webkit-app-region: drag;
+}
+
+.fvr-toolbar {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    -webkit-app-region: no-drag;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: 999px;
+    border: 1px solid #ffffff1f;
+    background: #10131cd9;
+    box-shadow: 0 8px 28px #0006, inset 0 1px 0 #ffffff14;
+    backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.fvr-toolbar button,
+.fvr-transport button,
+.fvr-progress,
+.fvr-card,
+.fvr-bg,
+.fvr-x {
+    -webkit-app-region: no-drag;
+}
+
+.fvr-toolbar button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #fffb;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+}
+
+.fvr-toolbar button:hover { background: #ffffff1f; color: #fff; }
+.fvr-toolbar .fvr-name {
+    width: auto;
+    padding: 0 12px;
+    display: flex;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: .2px;
+    white-space: nowrap;
+}
+.fvr-toolbar .fvr-name svg { color: var(--cvg-accent, #19c2d8); }
+.fvr-toolbar .fvr-next svg { transform: rotate(180deg); }
+
+.fvr-transport {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 60;
+    -webkit-app-region: no-drag;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: min(620px, calc(100% - 48px));
+    padding: 8px 14px;
+    border-radius: 16px;
+    border: 1px solid #ffffff1a;
+    background: #10131cd9;
+    box-shadow: 0 10px 32px #0007, inset 0 1px 0 #ffffff14;
+    backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.fvr-transport button {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #fffb;
+    cursor: pointer;
+}
+.fvr-transport button:hover { background: #ffffff1a; color: #fff; }
+.fvr-transport .fvr-play {
+    width: 38px;
+    height: 38px;
+    background: #fff;
+    color: #10131c;
+}
+.fvr-transport .fvr-play:hover { background: #f0f2f5; color: #10131c; }
+.fvr-time {
+    flex: none;
+    min-width: 42px;
+    font-size: 11px;
+    color: #fff9;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+.fvr-progress {
+    flex: 1;
+    min-width: 60px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--cvg-accent, #19c2d8);
+    cursor: pointer;
+}
+.fvr-progress::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: #ffffff2b; }
+.fvr-progress::-webkit-slider-thumb { margin-top: -4px; width: 12px; height: 12px; border-radius: 50%; background: var(--cvg-accent, #19c2d8); }
+.fvr-progress::-moz-range-track { height: 4px; border-radius: 999px; background: #ffffff2b; }
+.fvr-progress::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--cvg-accent, #19c2d8); }
+
+.fvr-picker {
+    position: absolute;
+    inset: 0;
+    z-index: 80;
+    -webkit-app-region: no-drag;
+    pointer-events: auto;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: #05070c99;
+    backdrop-filter: blur(10px);
+}
+.fvr-panel {
+    width: min(860px, calc(100vw - 48px));
+    max-height: min(78vh, 760px);
+    overflow: auto;
+    padding: 18px 20px 20px;
+    border-radius: 18px;
+    border: 1px solid #ffffff1f;
+    background: #10131cf2;
+    box-shadow: 0 30px 80px #0009, inset 0 1px 0 #ffffff14;
+    scrollbar-width: thin;
+}
+.fvr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.fvr-head b { display: block; font-size: 16px; font-weight: 700; letter-spacing: .3px; }
+.fvr-head small { display: block; margin-top: 3px; font-size: 11.5px; color: #fff8; letter-spacing: .3px; }
+.fvr-x { width: 30px; height: 30px; border: 0; border-radius: 50%; background: #ffffff12; color: #fffb; cursor: pointer; display: grid; place-items: center; }
+.fvr-x:hover { background: #ffffff24; color: #fff; }
+.fvr-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 900px) { .fvr-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .fvr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fvr-card {
+    min-height: 64px; padding: 10px 12px; border-radius: 12px; border: 1px solid #ffffff12;
+    background: #ffffff08; color: #fffc; text-align: left; font: inherit; cursor: pointer;
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    transition: background .12s, border-color .12s, transform .12s;
+}
+.fvr-card:hover { background: #ffffff14; border-color: #ffffff2b; transform: translateY(-1px); }
+.fvr-card.sel { background: color-mix(in srgb, var(--cvg-accent, #19c2d8) 26%, #10131c); border-color: color-mix(in srgb, var(--cvg-accent, #19c2d8) 62%, #ffffff33); }
+.fvr-card b { font-size: 13px; font-weight: 650; letter-spacing: .4px; }
+.fvr-card small { font-size: 10.5px; color: #fff7; letter-spacing: .2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fvr-card.sel small { color: #fffb; }
+.fvr-bgs { margin-top: 16px; padding-top: 14px; border-top: 1px solid #ffffff12; display: flex; align-items: center; gap: 12px; }
+.fvr-bgs > span { flex: none; font-size: 12px; color: #fff8; letter-spacing: .4px; }
+.fvr-bg-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.fvr-bg { height: 26px; padding: 0 12px; border-radius: 999px; border: 1px solid #ffffff14; background: #ffffff0a; color: #fffb; font: inherit; font-size: 11.5px; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+.fvr-bg:hover { background: #ffffff18; color: #fff; }
+.fvr-bg.sel { background: color-mix(in srgb, var(--cvg-accent, #19c2d8) 40%, #10131c); border-color: color-mix(in srgb, var(--cvg-accent, #19c2d8) 70%, #ffffff33); color: #fff; font-weight: 600; }
+
+.fvr-chrome { transition: opacity .25s ease; }
+.fvr-chrome-hidden { opacity: 0; pointer-events: none; }
+
+.fvr-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #ffffff12;
+}
+.fvr-foot button {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 9px;
+    border: 1px solid #ffffff14;
+    background: #ffffff0a;
+    color: #fffb;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.fvr-foot button:hover { background: #ffffff18; color: #fff; }
+.fvr-foot .fvr-foot-danger { color: #ff98a3; border-color: #ff5d6b33; background: #ff5d6b12; }
+.fvr-foot .fvr-foot-danger:hover { background: #ff5d6b22; color: #ffb3bc; }
+.fvr-foot .fvr-foot-quiet { color: #fffc; }
+
+.fvr-tip { display: inline-flex; }
+.fvr-tip-label {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    z-index: 120;
+    max-width: 240px;
+    padding: 6px 9px;
+    border-radius: 8px;
+    border: 1px solid #ffffff1f;
+    background: #14171ff2;
+    box-shadow: 0 8px 24px #0008;
+    color: #fffc;
+    font-size: 11.5px;
+    line-height: 1.4;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .12s ease;
+}
+.fvr-tip:hover > .fvr-tip-label,
+.fvr-tip:focus-within > .fvr-tip-label { opacity: 1; }

@@ -1,0 +1,37 @@
+/* Folia's Tailwind surface, injected into the plugin's shadow root. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./vendor/Folia/src/components/visualizer/backgrounds/common/GeometricBackground.css";
+@import "./vendor/Folia/src/components/modal/settings/kit/kit.css";
+
+@source "./vendor/Folia/src/components/visualizer";
+@source "./vendor/Folia/src/components/modal/settings/kit";
+@source "./vendor/Folia/src/components/shared";
+
+:host {
+    --font-sans: "Noto Sans CJK SC", system-ui, -apple-system, sans-serif;
+    --font-serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", serif;
+    --font-mono: ui-monospace, "JetBrains Mono", monospace;
+    display: block;
+    width: 100%;
+    height: 100%;
+    color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.fvr-stage, .fvr-stage > div { width: 100%; height: 100%; }
+
+.fvr-stage {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+/* Paper Shaders injects this into document.head, which a shadow root cannot see. */
+[data-paper-shader] { isolation: isolate; position: relative; }
+[data-paper-shader] canvas {
+    contain: strict; display: block; position: absolute; inset: 0; z-index: -1;
+    width: 100%; height: 100%; border-radius: inherit; corner-shape: inherit;
+}

@@ -598,7 +598,7 @@ export interface SparkleSongSnapshot {
    * （旧宿主不带这字段：判定可退回 mid 前缀约定 "local:"。）
    */
   src?: "online" | "local" | "nas";
-  /** 本地/NAS 曲目同源封面 URL（相对路径，自带防缓存 query）；无本地封面 = 空串，在线曲目 = 省略 */
+  /** 本地/NAS/微云曲目同源封面 URL（相对路径，自带防缓存 query）；无封面 = 空串，在线曲目 = 省略 */
   localCover?: string;
 }
 
