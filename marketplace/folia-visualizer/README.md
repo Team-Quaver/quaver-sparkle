@@ -13,11 +13,13 @@ Sparkle Marketplace 插件。把 [Folia Major](https://github.com/chthollyphile/
 
 ```sh
 cd vendor/Sparkle/marketplace/folia-visualizer
+pnpm install                         # 独立 checkout 需先装插件自己的构建依赖
 node build.mjs                       # 生成 runtime.js（单文件 ESM，React/Pixi/three/CSS 内联）
 node ../../scripts/build-marketplace.mjs
 ```
 
 `runtime.js` 与 `node_modules` 都不入库；`build.mjs` 会在缺失时借用 `ui/node_modules` 的构建依赖。
+独立 checkout / CI 没有宿主 `ui/` 时，先在本目录 `pnpm install`；构建脚本不再依赖主仓库路径。
 最终发行包由 Marketplace 构建脚本输出到 `vendor/Sparkle/dist/site/sparkle/plugins/folia-visualizer.js`。
 
 ## 许可

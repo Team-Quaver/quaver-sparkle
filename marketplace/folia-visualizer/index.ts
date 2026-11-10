@@ -24,7 +24,7 @@ function settingsSection(ctx: SparkleContext) {
   const intro = document.createElement("p");
   intro.className = "muted";
   intro.style.cssText = "margin:4px 0 12px;font-size:.88em;line-height:1.6";
-  intro.textContent = "播放页整页交给 Folia Major 的歌词动效：17 种样式、6 种背景，效果在插件自己的影子 DOM 里渲染。";
+  intro.textContent = "播放页交给 Folia 的歌词动效：17 种样式、6 种背景。";
   box.append(intro);
 
   const status = document.createElement("p");
@@ -113,12 +113,12 @@ function settingsSection(ctx: SparkleContext) {
 
 export default definePlugin({
   id: ID,
-  name: "Folia",
+  name: "Folia 辞境",
   version: "1.0.8",
   minHostVersion: "1.4.0",
   kind: "third-party",
   author: "Team Quaver",
-  description: "Folia Major 的 Quaver Music 移植版。（Folia by chthollyphile，使用 AGPLv3 协议开源）",
+  description: "Folia 播放器的 Quaver Music 移植版本。（Folia by chthollyphile，使用 AGPLv3 协议开源）",
   allowBeta: true,
   setup(ctx) {
     ctx.log.info("loaded");

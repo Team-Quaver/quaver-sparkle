@@ -143,6 +143,7 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
     });
     const [pickerOpen, setPickerOpen] = useState(false);
     const [chromeVisible, setChromeVisible] = useState(true);
+    const toolbarHovered = useRef(false);
     const hideTimer = useRef<number | null>(null);
     const [song, setSong] = useState<SparkleSongSnapshot | null>(() => np.current());
     const [lines, setLines] = useState<Line[]>(EMPTY_LINES);
@@ -258,7 +259,9 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
 
     const armHide = () => {
         if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
-        if (pickerOpen) return;
+        // 指针停在工具条上时不收：否则悬停到 3 秒后按钮连同提示一起消失，
+        // 而宿主的 .qtip 挂在 body 上，锚点不可见后还会留在原位。
+        if (pickerOpen || toolbarHovered.current) return;
         hideTimer.current = window.setTimeout(() => {
             hideTimer.current = null;
             setChromeVisible(false);
@@ -321,18 +324,29 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
                 onSeek={seek}
             />
 
-            <div className={`fvr-toolbar fvr-chrome${chromeVisible || pickerOpen ? '' : ' fvr-chrome-hidden'}`}>
-                <button type="button" className="fvr-prev" aria-label="上一个歌词动效" title="上一个歌词动效" onClick={() => stepMode(-1)}>
+            <div
+                className={`fvr-toolbar fvr-chrome${chromeVisible || pickerOpen ? '' : ' fvr-chrome-hidden'}`}
+                onPointerEnter={() => {
+                    toolbarHovered.current = true;
+                    if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+                    hideTimer.current = null;
+                }}
+                onPointerLeave={() => {
+                    toolbarHovered.current = false;
+                    armHide();
+                }}
+            >
+                <button type="button" className="fvr-prev" aria-label="上一个歌词动效" data-tooltip="上一个歌词动效" onClick={() => stepMode(-1)}>
                     <ChevronLeft size={15} />
                 </button>
                 <button type="button" className="fvr-name" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(open => !open)}>
                     <Sparkles size={15} />
                     <span>{labelOf(mode)}</span>
                 </button>
-                <button type="button" className="fvr-next" aria-label="下一个歌词动效" title="下一个歌词动效" onClick={() => stepMode(1)}>
+                <button type="button" className="fvr-next" aria-label="下一个歌词动效" data-tooltip="下一个歌词动效" onClick={() => stepMode(1)}>
                     <ChevronLeft size={15} />
                 </button>
-                <button type="button" aria-label="收回正在播放页" title="收回正在播放页" onClick={onCollapse}>
+                <button type="button" aria-label="收回正在播放页" data-tooltip="收回正在播放页" onClick={onCollapse}>
                     <ChevronDown size={15} />
                 </button>
             </div>

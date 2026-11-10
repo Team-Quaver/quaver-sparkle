@@ -40,6 +40,16 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      # Folia 的 runtime.js 是带 React/Pixi/CSS 的独立产物，不能交给 esbuild 直接解析源码；
+      # 先在插件目录装齐它自己的依赖并构建，再让 build-marketplace 只做最终单文件打包。
+      - name: Install Folia runtime deps
+        run: |
+          rm -rf marketplace/folia-visualizer/node_modules
+          pnpm --dir marketplace/folia-visualizer install --frozen-lockfile --ignore-workspace
+
+      - name: Build Folia runtime
+        run: node marketplace/folia-visualizer/build.mjs
+
       - name: Build marketplace
         run: node scripts/build-marketplace.mjs
 

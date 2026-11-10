@@ -19,6 +19,7 @@
     "i18next": "^26.4.2",
     "lucide-react": "^1.48.0",
     "music-metadata": "^11.16.1",
+    "opencc-js": "^1.4.2",
     "pixi.js": "^8.21.0",
     "react": "^19.3.0",
     "react-colorful": "^5.8.1",
@@ -31,5 +32,10 @@
     "vite": "^8.3.0",
     "wanakana": "^5.3.1",
     "zustand": "^5.0.15"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
