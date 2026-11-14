@@ -1,10 +1,20 @@
-// Folia 歌词动效 —— the now-playing takeover view and its chrome.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motionValue } from 'framer-motion';
-import { ChevronDown, ChevronLeft, Sparkles, X } from 'lucide-react';
-import type { SparkleNpViewCtx, SparkleSongSnapshot, SparkleStorage } from '@quaver/sparkle';
-import VisualizerRenderer from './vendor/Folia/src/components/visualizer/VisualizerRenderer';
-import type { Line, Theme } from './vendor/Folia/src/types';
+// Folia 歌词动效 —— 正在播放页的两个面
+//
+// 舞台（stage）= 移植自 Folia 的歌词动效；Lattice = 队列海报墙（见 lattice.tsx）。
+// 这条视图**不再自绘控制条**：样式/背景/选项全在走带控制的那颗按钮 + 浮窗里
+// （见 control.tsx）。页面上只留一颗返回钮（Folia 播放页同款，悬停出现、静止淡出）。
+//
+// 交互与 Folia 本体对齐：
+//   · 点歌词行跳转（带 lyricDelay 补偿）；
+//   · Space / K 播放暂停；← / → 快退/快进 5 秒；H 隐藏/显示播放条（Folia 的 KeyH）；
+//   · 自动隐藏：开启后指针静止 3.2 秒收起宿主播放条，一动就回来；
+//   · Esc 收起本页由宿主统一处理（NowPlaying 的 Escape 监听），这里不抢。
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motionValue } from "framer-motion";
+import { ChevronLeft } from "lucide-react";
+import type { SparkleNpViewCtx, SparkleSongSnapshot, SparkleStorage } from "@quaver/sparkle";
+import VisualizerRenderer from "./vendor/Folia/src/components/visualizer/VisualizerRenderer";
+import type { Line, Theme } from "./vendor/Folia/src/types";
 import {
     DEFAULT_TUNINGS,
     bandLevels,
@@ -17,15 +27,15 @@ import {
     readTheme,
     themeKey,
     type AudioBandValues,
-} from './data';
-import { FOLIA_BACKGROUNDS, FOLIA_MODES, isBackground, isMode, labelOf, type FoliaBackgroundId, type FoliaModeId } from './catalog';
+} from "./data";
+import type { FoliaBackgroundId, FoliaModeId } from "./catalog";
+import { LatticeWall } from "./lattice";
+import { bindFoliaStorage, useFoliaPrefs, writeFoliaPref } from "./prefs";
 
 interface FoliaViewProps {
     np: SparkleNpViewCtx;
     storage: SparkleStorage;
-    /** Disable the effect and return to the default now-playing page. */
-    onExit: () => void;
-    /** Collapse the now-playing page, keeping the effect enabled for next time. */
+    /** 收起正在播放页（保留动效开关，下次展开还是 Folia） */
     onCollapse: () => void;
 }
 
@@ -49,6 +59,12 @@ class StageBoundary extends React.Component<{ children: React.ReactNode }, { fai
     }
 }
 
+const isTyping = (target: EventTarget | null): boolean => {
+    const el = target instanceof HTMLElement ? target : null;
+
+    return !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+};
+
 const Stage = React.memo(function Stage({
     mode,
     backgroundMode,
@@ -63,6 +79,10 @@ const Stage = React.memo(function Stage({
     seed,
     duration,
     paused,
+    staticMode,
+    translation,
+    fontScale,
+    chromeHidden,
     onSeek,
 }: {
     mode: FoliaModeId;
@@ -78,13 +98,17 @@ const Stage = React.memo(function Stage({
     seed: string;
     duration: number;
     paused: boolean;
+    staticMode: boolean;
+    translation: boolean;
+    fontScale: number;
+    chromeHidden: boolean;
     onSeek: (seconds: number) => void;
 }) {
     const artist = (song?.singer ?? []).map(x => x.name).filter(Boolean).join(' / ') || null;
     // 商籁 / 凝彩 的字号基准公式不同（商籁按词数摊、凝彩按字数摊），一个倍数没法同时对上，
     // 所以各给一档，让两边的主歌词都落在浮名的量级上。其余样式保持 Folia 的默认比例。
     // 倍率只作用在特效歌词上，底部字幕另算（见各样式里的 resolveSubtitleFontSizes）。
-    const lyricScale = mode === 'sonnet' || mode === 'tempera' ? 0.3 : 1;
+    const lyricScale = (mode === 'sonnet' || mode === 'tempera' ? 0.3 : 1) * fontScale;
 
     return (
         <StageBoundary>
@@ -107,7 +131,7 @@ const Stage = React.memo(function Stage({
                     coverUrl={cover || null}
                     showText
                     seed={seed}
-                    staticMode={false}
+                    staticMode={staticMode}
                     paused={paused}
                     visualizerOpacity={1}
                     background={{ mode: backgroundMode }}
@@ -118,11 +142,11 @@ const Stage = React.memo(function Stage({
                     subtitleUpcomingLyricsBlur
                     showHarmonySubtitle={false}
                     harmonySubtitleBackground={false}
-                    isPlayerChromeHidden={false}
-                    hideTranslationSubtitle={false}
-                    showSubtitleTranslation
+                    isPlayerChromeHidden={chromeHidden}
+                    hideTranslationSubtitle={!translation}
+                    showSubtitleTranslation={translation}
                     subtitleContentMode="translation"
-                    subtitleOverlayLayout="current+translation"
+                    subtitleOverlayLayout={translation ? 'current+translation' : 'current'}
                     isPreviewMode
                     animateStyleSwitch
                     onLyricLineSeek={onSeek}
@@ -132,25 +156,18 @@ const Stage = React.memo(function Stage({
     );
 });
 
-export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
-    const [mode, setMode] = useState<FoliaModeId>(() => {
-        const saved = storage.get('style') ?? '';
-        return isMode(saved) ? saved : 'classic';
-    });
-    const [backgroundMode, setBackgroundMode] = useState<FoliaBackgroundId>(() => {
-        const saved = storage.get('background') ?? '';
-        return isBackground(saved) ? saved : 'latent';
-    });
-    const [pickerOpen, setPickerOpen] = useState(false);
-    const [chromeVisible, setChromeVisible] = useState(true);
-    const toolbarHovered = useRef(false);
-    const hideTimer = useRef<number | null>(null);
+export function FoliaView({ np, storage, onCollapse }: FoliaViewProps) {
+    bindFoliaStorage(storage);
+
+    const prefs = useFoliaPrefs();
     const [song, setSong] = useState<SparkleSongSnapshot | null>(() => np.current());
     const [lines, setLines] = useState<Line[]>(EMPTY_LINES);
     const [lineIndex, setLineIndex] = useState(-1);
     const [theme, setTheme] = useState<Theme>(() => readTheme());
     const [duration, setDuration] = useState(0);
     const [paused, setPaused] = useState(false);
+    const [expanded, setExpanded] = useState(() => np.expanded());
+    const [chromeHidden, setChromeHidden] = useState(false);
 
     const currentTime = useRef(motionValue(0)).current;
     const audioPower = useRef(motionValue(0)).current;
@@ -169,6 +186,7 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
     const themeRef = useRef(themeKey(theme));
     const songRef = useRef<string | null>(null);
 
+    // —— 宿主态同步（换曲 / 歌词 / 时长 / 暂停 / 展开） ——
     useEffect(() => {
         const syncLines = () => {
             const signature = lyricSignature(np);
@@ -207,12 +225,14 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
             }
 
             setPaused(prev => prev === np.paused() ? prev : np.paused());
+            setExpanded(prev => prev === np.expanded() ? prev : np.expanded());
         };
 
         sync();
         return np.onNotify(sync);
     }, [np]);
 
+    // —— 真实音频频谱（宿主门面；不可用就静默跳过） ——
     useEffect(() => {
         const facade = np.spectrum?.();
 
@@ -231,7 +251,10 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
         });
     }, [np, audioPower, bass, lowMid, mid, spectrum, treble, vocal]);
 
+    // —— 歌词时钟（自驱 rAF；Lattice 与收起态不跑） ——
     useEffect(() => {
+        if (prefs.surface === 'lattice') return;
+
         let raf = 0;
 
         const tick = () => {
@@ -251,59 +274,112 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
         raf = requestAnimationFrame(tick);
 
         return () => cancelAnimationFrame(raf);
-    }, [currentTime, np]);
+    }, [currentTime, np, prefs.surface]);
 
     const cover = useMemo(() => coverFor(song), [song]);
     const seed = song?.mid ?? '';
-    const seek = useMemo(() => (seconds: number) => np.seek(seconds + (np.lyricDelay?.() ?? 0) / 1000, { immediate: true }), [np]);
+    const seek = useMemo(
+        () => (seconds: number) => np.seek(seconds + (np.lyricDelay?.() ?? 0) / 1000, { immediate: true }),
+        [np],
+    );
 
-    const armHide = () => {
-        if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
-        // 指针停在工具条上时不收：否则悬停到 3 秒后按钮连同提示一起消失，
-        // 而宿主的 .qtip 挂在 body 上，锚点不可见后还会留在原位。
-        if (pickerOpen || toolbarHovered.current) return;
-        hideTimer.current = window.setTimeout(() => {
-            hideTimer.current = null;
-            setChromeVisible(false);
-        }, 3000);
-    };
-
-    const wake = () => {
-        setChromeVisible(true);
-        armHide();
-    };
-
+    // —— 播放条显隐：只在「本页真的展开 + 用户/自动隐藏」时挂 body 标记 ——
+    // 收起到别的页面时插件视图仍然挂载（syncNpView 的语义），所以不能只按 chromeHidden
+    // 写 body class —— 那会把播放条在全站藏掉。
     useEffect(() => {
-        wake();
-        return () => {
-            if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+        const on = expanded && chromeHidden;
+        document.body.classList.toggle('fvr-bar-hidden', on);
+
+        return () => document.body.classList.remove('fvr-bar-hidden');
+    }, [expanded, chromeHidden]);
+
+    // —— 自动隐藏（Folia 的 autoHidePlayerChrome）：静止 3.2 秒收起，指针/键盘一动就回来 ——
+    useEffect(() => {
+        if (!prefs.autoHideChrome) {
+            setChromeHidden(false);
+
+            return;
+        }
+
+        let timer = 0;
+        const wake = () => {
+            setChromeHidden(false);
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => {
+                // 宿主的走带浮窗开着时不收：浮窗就挂在播放条里，收起播放条等于把用户
+                // 正在点的面板一起藏掉（宿主在任意走带浮窗打开时挂 body.sparkle-pop-open）。
+                if (document.body.classList.contains('sparkle-pop-open')) return;
+                setChromeHidden(true);
+            }, 3200);
         };
-        // The timer restarts when the picker opens/closes.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pickerOpen]);
 
-    const chooseMode = (next: FoliaModeId) => {
-        setMode(next);
-        storage.set('style', next);
-    };
+        wake();
+        window.addEventListener('pointermove', wake, { passive: true });
+        window.addEventListener('pointerdown', wake, { passive: true });
+        window.addEventListener('keydown', wake);
 
-    const chooseBackground = (next: FoliaBackgroundId) => {
-        setBackgroundMode(next);
-        storage.set('background', next);
-    };
+        return () => {
+            window.clearTimeout(timer);
+            window.removeEventListener('pointermove', wake);
+            window.removeEventListener('pointerdown', wake);
+            window.removeEventListener('keydown', wake);
+        };
+    }, [prefs.autoHideChrome]);
 
-    const stepMode = (delta: number) => {
-        const index = FOLIA_MODES.findIndex(item => item.id === mode);
-        chooseMode(FOLIA_MODES[(index + delta + FOLIA_MODES.length) % FOLIA_MODES.length].id);
-    };
+    // —— 键盘交互（只在舞台上；Lattice 有自己的导航） ——
+    useEffect(() => {
+        if (prefs.surface !== 'stage') return;
+
+        const seekBy = (delta: number) => {
+            const total = np.duration();
+            const next = Math.max(0, total > 0 ? Math.min(total, np.time() + delta) : np.time() + delta);
+            np.seek(next, { immediate: true });
+        };
+
+        const onKey = (event: KeyboardEvent) => {
+            if (event.defaultPrevented || isTyping(event.target)) return;
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+            const key = event.key.toLowerCase();
+
+            if (event.key === ' ' || key === 'k') {
+                event.preventDefault();
+                np.toggle();
+            } else if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                seekBy(-5);
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                seekBy(5);
+            } else if (key === 'h') {
+                event.preventDefault();
+                setChromeHidden(hidden => !hidden);
+            }
+        };
+
+        window.addEventListener('keydown', onKey);
+
+        return () => window.removeEventListener('keydown', onKey);
+    }, [np, prefs.surface]);
+
+    const wake = () => setChromeHidden(false);
+
+    if (prefs.surface === 'lattice') {
+        return (
+            <div className={`fvr${chromeHidden ? ' is-idle' : ''}`} onPointerMove={wake} onPointerDown={wake}>
+                <div className="fvr-drag" aria-hidden="true" />
+                <LatticeWall np={np} onBack={() => writeFoliaPref('surface', 'stage')} />
+            </div>
+        );
+    }
 
     return (
-        <div className="fvr" onPointerMove={wake} onPointerDown={wake}>
+        <div className={`fvr${chromeHidden ? ' is-idle' : ''}`} onPointerMove={wake} onPointerDown={wake}>
             <div className="fvr-drag" aria-hidden="true" />
 
             <Stage
-                mode={mode}
-                backgroundMode={backgroundMode}
+                mode={prefs.style}
+                backgroundMode={prefs.background}
                 currentTime={currentTime}
                 audioPower={audioPower}
                 audioBands={audioBands}
@@ -315,87 +391,20 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
                 seed={seed}
                 duration={duration}
                 paused={paused}
+                staticMode={prefs.staticMode}
+                translation={prefs.translation}
+                fontScale={prefs.fontScale}
+                chromeHidden={chromeHidden}
                 onSeek={seek}
             />
 
-            <div
-                className={`fvr-toolbar fvr-chrome${chromeVisible || pickerOpen ? '' : ' fvr-chrome-hidden'}`}
-                onPointerEnter={() => {
-                    toolbarHovered.current = true;
-                    if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
-                    hideTimer.current = null;
-                }}
-                onPointerLeave={() => {
-                    toolbarHovered.current = false;
-                    armHide();
-                }}
-            >
-                <button type="button" className="fvr-prev" aria-label="上一个歌词动效" data-tooltip="上一个歌词动效" onClick={() => stepMode(-1)}>
-                    <ChevronLeft size={15} />
+            {/* 唯一的页面内控件：返回（Folia 播放页同款）。样式/背景在走带控制的浮窗里。 */}
+            <div className={`fvr-chrome${chromeHidden ? ' fvr-chrome-hidden' : ''}`}>
+                <button type="button" className="fvr-back" onClick={onCollapse} data-tooltip="收起播放页（Esc）" aria-label="收起播放页">
+                    <ChevronLeft size={18} />
                 </button>
-                <button type="button" className="fvr-name" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(open => !open)}>
-                    <Sparkles size={15} />
-                    <span>{labelOf(mode)}</span>
-                </button>
-                <button type="button" className="fvr-next" aria-label="下一个歌词动效" data-tooltip="下一个歌词动效" onClick={() => stepMode(1)}>
-                    <ChevronLeft size={15} />
-                </button>
-                <button type="button" aria-label="收回正在播放页" data-tooltip="收回正在播放页" onClick={onCollapse}>
-                    <ChevronDown size={15} />
-                </button>
+                <span className="fvr-keyhint">H 隐藏播放条 · ←/→ 快退/快进 5s</span>
             </div>
-
-            {pickerOpen && (
-                <div className="fvr-picker" role="dialog" aria-modal="true" aria-label="歌词动效" onClick={event => { if (event.target === event.currentTarget) setPickerOpen(false); }}>
-                    <div className="fvr-panel">
-                        <header className="fvr-head">
-                            <div>
-                                <b>歌词动效</b>
-                                <small>Folia Major · 全套 {FOLIA_MODES.length} 种</small>
-                            </div>
-                            <button type="button" className="fvr-x" aria-label="关闭" onClick={() => setPickerOpen(false)}>
-                                <X size={15} />
-                            </button>
-                        </header>
-                        <div className="fvr-grid" role="radiogroup" aria-label="歌词动效">
-                            {FOLIA_MODES.map(item => (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    className={`fvr-card${item.id === mode ? ' sel' : ''}`}
-                                    role="radio"
-                                    aria-checked={item.id === mode}
-                                    onClick={() => chooseMode(item.id)}
-                                >
-                                    <b>{item.label}</b>
-                                    <small>{item.hint}</small>
-                                </button>
-                            ))}
-                        </div>
-                        <div className="fvr-bgs">
-                            <span>背景</span>
-                            <div className="fvr-bg-list" role="radiogroup" aria-label="背景">
-                                {FOLIA_BACKGROUNDS.map(item => (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        className={`fvr-bg${item.id === backgroundMode ? ' sel' : ''}`}
-                                        role="radio"
-                                        aria-checked={item.id === backgroundMode}
-                                        onClick={() => chooseBackground(item.id)}
-                                    >
-                                        {item.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="fvr-foot">
-                            <button type="button" className="fvr-foot-danger" onClick={onExit}>关闭歌词动效</button>
-                            <button type="button" className="fvr-foot-quiet" onClick={onCollapse}>收回播放页</button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

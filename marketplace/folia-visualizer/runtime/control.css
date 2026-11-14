@@ -1,0 +1,114 @@
+/* Folia 歌词动效 —— 走带控制浮窗（宿主播放条上那颗按钮的内容）
+   注意：这段 CSS 不在插件的 Shadow DOM 里（浮窗挂在宿主播放条上），由 control.tsx 注入
+   document.head，选择器统一带 .fvr-panel 前缀，颜色全部走宿主令牌，跟随明暗与主题。 */
+.fvr-panel {
+    display: flex; flex-direction: column; gap: 10px;
+    color: var(--ink); font-size: 12.5px; line-height: 1.5;
+}
+
+.fvr-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.fvr-panel-head b { display: block; font-size: 14px; font-weight: 700; letter-spacing: .2px; }
+.fvr-panel-head small { display: block; margin-top: 2px; font-size: 11px; color: var(--ink2); }
+.fvr-panel-tag {
+    flex: none; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600;
+    color: color-mix(in srgb, var(--cvg-accent, var(--acc)) 60%, var(--ink));
+    background: color-mix(in srgb, var(--cvg-accent, var(--acc)) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--cvg-accent, var(--acc)) 34%, transparent);
+}
+.fvr-panel-tag.is-off { color: var(--ink2); background: color-mix(in srgb, var(--ink) 6%, transparent); border-color: color-mix(in srgb, var(--ink) 14%, transparent); }
+
+.fvr-panel-label {
+    font-size: 11px; font-weight: 600; letter-spacing: .4px; color: var(--ink2);
+    margin-top: 2px;
+}
+.fvr-panel-label small { font-weight: 500; opacity: .8; margin-left: 6px; letter-spacing: 0; }
+
+.fvr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.fvr-grid--bg { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.fvr-chip {
+    display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+    padding: 6px 9px; border-radius: 9px; text-align: left; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    color: var(--ink); font: inherit;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.fvr-chip:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); border-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+.fvr-chip b { font-size: 12.5px; font-weight: 650; letter-spacing: .3px; }
+.fvr-chip small { font-size: 10px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.fvr-chip.sel {
+    border-color: color-mix(in srgb, var(--cvg-accent, var(--acc)) 62%, transparent);
+    background: color-mix(in srgb, var(--cvg-accent, var(--acc)) 18%, transparent);
+}
+.fvr-chip.sel b { color: color-mix(in srgb, var(--cvg-accent, var(--acc)) 45%, var(--ink)); }
+.fvr-chip.sel small { color: color-mix(in srgb, var(--cvg-accent, var(--acc)) 32%, var(--ink2)); }
+
+.fvr-chip--pill {
+    flex-direction: row; align-items: center; justify-content: center; padding: 5px 8px; font-size: 11.5px;
+}
+.fvr-chip--pill.sel { font-weight: 600; }
+
+.fvr-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 6px 2px; border-radius: 8px;
+}
+.fvr-row + .fvr-row { border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+.fvr-row-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fvr-row-text b { font-size: 12.5px; font-weight: 600; }
+.fvr-row-text small { font-size: 10.5px; color: var(--ink2); }
+
+/* 开关：不用 input[type=checkbox] 的默认外观（宿主设置页是同一套视觉语言） */
+.fvr-sw {
+    flex: none; position: relative; width: 34px; height: 19px; padding: 0; border-radius: 999px; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
+    transition: background .14s, border-color .14s;
+}
+.fvr-sw::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--ink); opacity: .75; transition: transform .14s ease, opacity .14s;
+}
+.fvr-sw[aria-checked="true"] {
+    background: color-mix(in srgb, var(--cvg-accent, var(--acc)) 55%, transparent);
+    border-color: color-mix(in srgb, var(--cvg-accent, var(--acc)) 70%, transparent);
+}
+.fvr-sw[aria-checked="true"]::after { transform: translateX(15px); background: #fff; opacity: .95; }
+
+.fvr-seg { display: flex; gap: 4px; flex-wrap: wrap; }
+.fvr-seg button {
+    padding: 4px 9px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 11.5px;
+    border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    color: var(--ink2);
+}
+.fvr-seg button.sel {
+    color: color-mix(in srgb, var(--cvg-accent, var(--acc)) 45%, var(--ink));
+    border-color: color-mix(in srgb, var(--cvg-accent, var(--acc)) 55%, transparent);
+    background: color-mix(in srgb, var(--cvg-accent, var(--acc)) 15%, transparent);
+}
+
+.fvr-panel-foot {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 2px; padding-top: 9px;
+    border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.fvr-panel-btn {
+    padding: 5px 10px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 600;
+    border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink);
+}
+.fvr-panel-btn:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.fvr-panel-btn.is-quiet { font-weight: 500; color: var(--ink2); }
+.fvr-panel-btn.is-danger {
+    color: color-mix(in srgb, #ff6b7a 72%, var(--ink));
+    border-color: color-mix(in srgb, #ff6b7a 36%, transparent);
+    background: color-mix(in srgb, #ff6b7a 12%, transparent);
+}
+.fvr-panel-btn.is-danger:hover { background: color-mix(in srgb, #ff6b7a 20%, transparent); }
+.fvr-panel-note { font-size: 10.5px; color: var(--ink2); margin-left: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    .fvr-chip, .fvr-sw, .fvr-sw::after { transition: none; }
+}
