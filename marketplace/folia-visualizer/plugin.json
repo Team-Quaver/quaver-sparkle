@@ -1,7 +1,7 @@
 {
   "id": "folia-visualizer",
   "name": "Folia 辞境",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "minHostVersion": "1.8.0",
   "allowBeta": true,
   "author": "Team Quaver",

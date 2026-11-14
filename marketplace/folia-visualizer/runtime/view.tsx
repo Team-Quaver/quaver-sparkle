@@ -282,12 +282,6 @@ export function FoliaView({ np, storage, onExit, onCollapse }: FoliaViewProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pickerOpen]);
 
-    useEffect(() => {
-        // The host's own player bar is the transport inside Folia; hide it with the plugin chrome.
-        document.body.classList.toggle('fvr-bar-hidden', !(chromeVisible || pickerOpen));
-        return () => document.body.classList.remove('fvr-bar-hidden');
-    }, [chromeVisible, pickerOpen]);
-
     const chooseMode = (next: FoliaModeId) => {
         setMode(next);
         storage.set('style', next);

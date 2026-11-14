@@ -114,7 +114,7 @@ function settingsSection(ctx: SparkleContext) {
 export default definePlugin({
   id: ID,
   name: "Folia 辞境",
-  version: "1.0.8",
+  version: "1.0.9",
   minHostVersion: "1.4.0",
   kind: "third-party",
   author: "Team Quaver",
@@ -124,7 +124,8 @@ export default definePlugin({
     ctx.log.info("loaded");
 
     // The transport inside Folia is Quaver's own #player-bar, not a redrawn bar. The host hides it
-    // for every np takeover; show it only for this plugin and let the plugin chrome hide it.
+    // for every np takeover; show it only for this plugin. It stays visible at all times — the
+    // plugin only auto-hides its own control pill (which floats right above the bar).
     ctx.registerStyleLayer({
       id: "folia-host-player-bar",
       order: 100,
@@ -134,11 +135,6 @@ body.np-takeover:has(.np-view-root[data-plugin="folia-visualizer"]) #player-bar 
   opacity: 1;
   transform: none;
   transition: opacity .25s ease, transform .25s ease;
-}
-body.np-takeover.fvr-bar-hidden:has(.np-view-root[data-plugin="folia-visualizer"]) #player-bar {
-  opacity: 0;
-  transform: translateY(14px);
-  pointer-events: none;
 }
 `,
     });

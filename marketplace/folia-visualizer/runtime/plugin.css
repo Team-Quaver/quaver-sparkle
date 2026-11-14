@@ -17,10 +17,12 @@
     -webkit-app-region: drag;
 }
 
+/* 控制胶囊挂在**走带控制条**正上方，不再占用 CSD 顶带（--top-band-h 那条拖拽带要留给
+   窗口拖拽与宿主/其他插件的原生控件）。停靠态与悬浮态条的位置不同，各按宿主令牌抬升。 */
 .fvr-toolbar {
     position: absolute;
-    top: 14px;
     left: 50%;
+    bottom: calc(var(--control-bar-height, 64px) + var(--control-bar-dock-gap, 10px) + 12px);
     transform: translateX(-50%);
     z-index: 60;
     -webkit-app-region: no-drag;
@@ -34,6 +36,11 @@
     background: #10131cd9;
     box-shadow: 0 8px 28px #0006, inset 0 1px 0 #ffffff14;
     backdrop-filter: blur(18px) saturate(1.3);
+}
+
+/* 悬浮态条离底更远（inset*2 + lift），胶囊跟着条走，不写死像素。 */
+:host-context(body[data-control-bar="floating"]) .fvr-toolbar {
+    bottom: calc(var(--control-bar-inset, 10px) * 2 + var(--control-bar-lift, 14px) + var(--control-bar-height, 64px) + 12px);
 }
 
 .fvr-toolbar button,
