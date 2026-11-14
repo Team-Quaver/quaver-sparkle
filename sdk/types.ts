@@ -190,6 +190,31 @@ export interface SparkleThemePlaylistMode {
   mode: "host" | "menu" | "collection";
 }
 
+/**
+ * 主题对「透明模式」的态度。
+ *
+ * 透明模式 = 宿主把**窗口画布**交给主题：`html` / `body` / `.frame` 的默认实底让出来，
+ * 由主题决定每一层用多不透明的底色（`color-mix()`、`rgba()`、`backdrop-filter` 都行），
+ * 于是宿主的环境背景层（专辑封面 / 自定义壁纸，见 `lib/ambient.ts`）能从主题表面下透出来，
+ * 做出玻璃 / 亚克力 / 磨砂一类主题 —— 不需要伪造背景，也不用和用户选的壁纸抢整窗。
+ *
+ * **不声明**（`theme.transparent` 缺省）= 不透明：宿主照旧用 `--bg` 实底铺满窗口，
+ * 设置页不出现相关提示。
+ *
+ * 声明 `mode: "on"` = 启用透明模式。宿主做的事只有三件：
+ *   ① 在 `<html>` 上写 `data-sparkle-transparent="on"`（供主题写条件选择器）；
+ *   ② 摘掉宿主自己的实底（`html` / `body` / `.frame` 的 `background`），并把 `--bg` 退回透明；
+ *   ③ 向主进程请求把窗口底色置为透明（平台支持时，见宿主实现；CSS 这条路恒生效）。
+ * 面板本身要不要半透明、模糊多强，全部由主题在 `css` 里写 —— 宿主不替你猜。
+ *
+ * 注意：透明模式只在「背景」不被强制关闭时有意义。主题同时写 `background: { mode: "off" }`
+ * 时宿主没有下层可透，窗口会露出桌面/窗口底色，通常不是想要的效果。
+ */
+export interface SparkleThemeTransparent {
+  /** `"on"` = 主题启用透明模式；`"host"` = 交还宿主（不透明）。缺省 = 宿主。 */
+  mode: "host" | "on";
+}
+
 /** 自定义主题：css 是一组 CSS 变量覆盖，作用于 html[data-sparkle-theme="<id>"] */
 export interface SparkleTheme {
   id: string;
@@ -205,6 +230,8 @@ export interface SparkleTheme {
   controlBar?: SparkleThemeControlBar;
   /** 歌单的显示模式归谁管，见 SparkleThemePlaylistMode。**缺省 = 宿主接管**（默认「菜单栏」）。 */
   playlistMode?: SparkleThemePlaylistMode;
+  /** 透明模式归谁管，见 SparkleThemeTransparent。**缺省 = 宿主（不透明）**。 */
+  transparent?: SparkleThemeTransparent;
 }
 
 // —— 样式层 / 主题包 ——
@@ -356,6 +383,98 @@ export interface SparkleNpSpectrumMode {
   id: string;
   label: string;
   render(host: HTMLElement, ctx: SparkleNpSpectrumRenderCtx): (() => void) | void;
+}
+
+// —— 走带控制（播放条右侧控制簇） ——
+
+/**
+ * 走带控制里的一个插件控件：**一颗按钮 + 它自己的浮窗**。
+ *
+ * 为什么需要这个扩展点：`registerNowPlayingView` 能让插件接管整页，但**传输控制属于宿主**
+ * （播放条是常驻控件，接管时也不会让出去）。想把「本插件自己的控制台」放到用户顺手的位置，
+ * 只能注册到播放条上 —— 宿主负责按钮、锚点、开合、点外关闭与键盘可达性，插件只管浮窗内容。
+ *
+ * 宿主渲染规则：
+ *   · 按钮进播放条右侧控制簇（音量 / 播放模式 / 音质 / 收藏 / 队列那一排），按 `order` 升序
+ *     排在「队列」之前；宽度不够时宿主按既有响应式规则收掉；
+ *   · 浮窗锚在**按钮正上方**（与音量浮窗同一套定位逻辑），复用宿主的玻璃令牌
+ *     `--menu-filter / --menu-surface / --menu-line / --menu-shadow`，主题能统一改外观；
+ *   · 开合 = 点按钮切换 / 点浮窗外关闭 / Esc 关闭；`render` 只在**首次打开**时调用一次，
+ *     之后浮窗内容常驻（插件不必每次打开重建 DOM），停用插件时调清理函数。
+ *
+ * 插件停用 = 按钮与浮窗一起摘掉；正在播放页的接管视图不受影响（两件事分开注册）。
+ */
+export interface SparkleTransportControl {
+  /** 小写 kebab-case，插件内唯一 */
+  id: string;
+  /** 无障碍名与 tooltip（缺省 = 插件名） */
+  label: string;
+  /** 补在 tooltip 后面的说明（可选） */
+  hint?: string;
+  /** 24 网格、`currentColor` 描边的内联 SVG；缺省用宿主的星形图标 */
+  iconSvg?: string;
+  /** 浮窗宽度（px，含内边距；宿主夹到 240..560 并再按视口收）。缺省 320。 */
+  width?: number;
+  /** 排序，小的靠前；缺省 0。同一插件多个控件按注册序。 */
+  order?: number;
+  /** 渲染浮窗内容；返回的函数在停用插件时调用。 */
+  render(host: HTMLElement, ctx: SparkleTransportCtx): (() => void) | void;
+}
+
+/** 走带控件浮窗的上下文（闭包取值，读到的永远是当前态）。 */
+export interface SparkleTransportCtx {
+  /** 浮窗此刻是否打开（插件想在某个动作后自行收起时读它） */
+  open(): boolean;
+  /** 开 / 关浮窗（不需要等宿主下一帧；同步生效） */
+  setOpen(open: boolean): void;
+  /** 播放器只读门面（与 `ctx.player` 同一份） */
+  player: SparklePlayerFacade;
+  /** 播放条根元素（量宽度、对齐自绘内容时用；不要改它的 class 之外的结构） */
+  bar(): HTMLElement;
+  /** 正在播放页是否展开（等同于点播放条左端的封面钮） */
+  expanded(): boolean;
+  /** 展开正在播放页（无当前曲时是空操作） */
+  expand(): void;
+  /** 收起正在播放页（退出全屏等收尾由宿主统一做） */
+  collapse(): void;
+}
+
+// —— 菜单栏（侧栏主菜单 / 底部调整区） ——
+
+/**
+ * 插件注册进「菜单栏」的一项。菜单栏 = 左侧侧栏：主菜单列表（`.nav`）与其底部的调整区
+ * （`.side-foot`，设置 / 缩回两颗按钮所在的那一排）。
+ *
+ * 与 `registerNav` 的分工：`registerNav` 是**路由入口**（点进去是插件自己的页面，参与
+ * 宿主的导航高亮）；本扩展点注册的是**选项 / 动作**（开关、面板、外部跳转…），可以带
+ * 勾选态（`checked()`），并且会出现在 设置 → 外观 → 菜单栏 的「插件选项」调整区里，
+ * 用户可以逐项显示/隐藏（宿主记忆在 `localStorage["quaver.sparkle.menubar.hidden.v1"]`）。
+ *
+ * 宿主渲染规则：
+ *   · `slot: "main"`（缺省）→ 侧栏主菜单列表，排在内置项与插件路由项之后、「更多」之前；
+ *   · `slot: "foot"` → 侧栏底部调整区，排在设置齿轮之前；缩回侧栏时与设置/缩回一起竖排保留；
+ *   · 有 `checked()` 的项画成可勾选项（`aria-pressed` + 亮起态），点击后宿主重读 `checked()`；
+ *   · 点击 = 调 `run(el)`；宿主不替你做任何状态变更（`checked()` 是只读快照）。
+ *
+ * 停用插件 = 这些项连同调整区里的那一行一起消失。
+ */
+export interface SparkleMenuBarItem {
+  /** kebab-case，插件内唯一 */
+  id: string;
+  label: string;
+  /** tooltip / 副标题 */
+  hint?: string;
+  /** 24 网格、`currentColor` 描边的内联 SVG；缺省用宿主的星形图标 */
+  iconSvg?: string;
+  /** 注册位置：主菜单列表（缺省）/ 侧栏底部调整区 */
+  slot?: "main" | "foot";
+  /**
+   * 选项型：返回当前勾选态。不写 = 普通动作项（点击后不变样）。
+   * 宿主在每次点击后与注册表变化时重读，别在里面做副作用。
+   */
+  checked?(): boolean;
+  /** 点击行为；el 是那一行/那颗按钮本身（需要就地改文案时用） */
+  run(el: HTMLElement): void;
 }
 
 /**
@@ -780,6 +899,10 @@ export interface SparkleContext {
   registerNowPlayingView(view: SparkleNpView): void;
   /** 注册正在播放页频谱形态（与内置 bars/mirror/wave 同表；停用插件即移除） */
   registerNowPlayingSpectrumMode(mode: SparkleNpSpectrumMode): void;
+  /** 注册走带控制（播放条右侧控制簇）里的一个控件：一颗按钮 + 它自己的浮窗 */
+  registerTransportControl(control: SparkleTransportControl): void;
+  /** 注册一项菜单栏选项/动作（侧栏主菜单或底部调整区；可在设置页逐项显隐） */
+  registerMenuBarItem(item: SparkleMenuBarItem): void;
   /** 注册歌曲右键菜单项（追加在「更多操作」之前） */
   registerSongMenuItem(item: SparkleMenuItem | ((ctx: SparkleSongMenuCtx) => SparkleMenuItem)): void;
   /** 注册侧栏（主菜单栏）歌单右键菜单项（追加在内置项之后） */

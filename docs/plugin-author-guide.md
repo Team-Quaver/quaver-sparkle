@@ -47,9 +47,11 @@ export default definePlugin({
 | `registerNav(item)` | 侧栏导航项（追加在内置项后） | 移除 DOM |
 | `registerSonglistGroup(group)` | 侧栏歌单区追加一组自定义列表，`items()` 每次重画时取最新 | 移除分组并重画侧栏 |
 | `registerSettingsSection(section)` | 设置页「花火插件」标签的一组设置区 | 随面板销毁 |
-| `registerTheme(theme)` | 自定义主题：css 注入为 `html[data-sparkle-theme="<id>"]{…}` 变量组覆盖（未覆盖的变量回落亮/暗底色）。`theme.tint` 声明**高亮色**归谁管、`theme.background` 声明**背景**归谁管、`theme.menus` 声明**浮层菜单的外观**归谁管、`theme.controlBar` 声明**播放控制条停靠形态**归谁管、`theme.playlistMode` 声明**歌单显示模式**归谁管（前三者缺省都是主题自带；控制条与歌单模式缺省都归宿主偏好，见相关小节） | 删 style；若正激活该主题则回落默认；高亮色/背景/菜单外观/控制条/歌单模式策略同步重算 |
+| `registerTheme(theme)` | 自定义主题：css 注入为 `html[data-sparkle-theme="<id>"]{…}` 变量组覆盖（未覆盖的变量回落亮/暗底色）。`theme.tint` 声明**高亮色**归谁管、`theme.background` 声明**背景**归谁管、`theme.menus` 声明**浮层菜单的外观**归谁管、`theme.controlBar` 声明**播放控制条停靠形态**归谁管、`theme.playlistMode` 声明**歌单显示模式**归谁管、`theme.transparent` 声明**透明模式**（前三者缺省都是主题自带；控制条、歌单模式与透明模式缺省都归宿主，见相关小节） | 删 style；若正激活该主题则回落默认；高亮色/背景/菜单外观/控制条/歌单模式/透明模式策略同步重算 |
 | `registerStyleLayer(layer)` | 追加一张**全站样式层**（任意 CSS，不限变量覆盖）。`order` 决定层序，缺省 0；插件启用即生效，与主题包选择无关 | 摘掉这张 `<style>` |
 | `registerThemePack(pack)` | 注册主题包（一套可切换的完整风格，如 MD3 的亮/暗/高对比）。用户在 设置 → 花火插件 → 主题 里切 | 停用插件即摘除；若正选中该包则自动回落默认外观 |
+| `registerTransportControl(c)` | **走带控制**（播放条右侧控制簇）里挂一颗按钮 + 它的浮窗：`c.render(host, ctx)` 只画浮窗内容，按钮/锚点/开合/点外关闭/Esc/无障碍都归宿主。整页接管视图拿不到传输控制，想让插件自己的控制台出现在用户顺手的位置就用这个 | 摘掉按钮与浮窗、调 render 的清理函数 |
+| `registerMenuBarItem(item)` | 菜单栏（侧栏主菜单 / 底部调整区）里的一个**选项或动作**：`slot` 选 `main` / `foot`，`checked()` 给勾选态，`run(el)` 执行。会同时出现在 设置 → 外观 → 菜单栏 的「插件选项」调整区，用户可逐项显隐 | 摘掉侧栏 DOM 与设置页那一行 |
 | `registerNowPlayingWidget(w)` | 正在播放页歌词区下方的插件槽内挂部件 | 移除 DOM + 调 render 的清理函数 |
 | `registerNowPlayingView(v)` | **整页接管**正在播放页：宿主让出 `.np-inner`、隐藏原播放条与插件槽，插件自绘整页（封面流 / 歌词 / 播放控制）。`v.enabled()` 返回 false 时不接管；`render(host, ctx)` 的 ctx 见下 | 卸载插件视图、恢复默认布局、恢复播放条 |
 | `registerNowPlayingSpectrumMode(m)` | 给正在播放页的真实音频频谱注册一种自绘形态；`m.id` 为小写 kebab-case 且全局唯一，`render(host, ctx)` 里用 `ctx.frame()/onFrame()` 取 FFT 与波形。形态会出现在宿主 ⋮ 菜单 | 移出模式表；若正在使用则回落 `bars` |
@@ -162,6 +164,63 @@ ctx.registerNowPlayingView({
 `ctx.spectrum()` 还能读写总开关与当前形态（与宿主 ⋮ 菜单同一份持久化偏好）：
 `enabled() / setEnabled() / mode() / modes() / setMode()`。整页接管视图里宿主自带的
 频谱槽会隐藏，请用同一门面自己绘制；关掉视图后由宿主默认布局接着显示。
+
+## 走带控制（播放条上的按钮 + 浮窗）
+
+`registerNowPlayingView` 能把整页交出去，但**传输控制不属于插件**：播放条是常驻控件，
+接管时也不会让出来。想让插件自己的控制台出现在用户顺手的位置（音量 / 音质 / 队列那一排），
+用 `registerTransportControl`：
+
+```ts
+ctx.registerTransportControl({
+  id: "my-panel",
+  label: "我的控制台",       // 无障碍名与 tooltip
+  hint: "样式 / 选项",       // 补在 tooltip 后面
+  iconSvg: '<svg …>',        // 24 网格 currentColor；缺省用宿主的星形
+  width: 340,                // 浮窗宽度（继续被夹到 240..560 与视口内）
+  order: 10,                 // 右侧控制簇里的顺序（排在「队列」之前）
+  render(host, transport) {
+    // host = 浮窗容器：玻璃底、圆角、定位与开合都由宿主给好
+    host.append(myControls());
+    return () => { /* 停用插件 / 卸载时清理 */ };
+  },
+});
+```
+
+浮窗生命周期：**首次打开才 render**，之后常驻（开合不重建 DOM）；点浮窗外 / Esc 关闭；
+外观复用宿主的 `--menu-*` 玻璃令牌，主题能统一改。`transport` 是只读闭包 + 明确控制面：
+
+| 分类 | 方法 |
+|---|---|
+| 浮窗 | `open()` / `setOpen(v)` |
+| 播放 | `player`（只读门面，见下） |
+| 页面 | `bar()` / `expanded()` / `expand()` / `collapse()` |
+
+停用插件 = 按钮与浮窗一起摘掉；正在播放页的接管视图是**另一条**注册，互不影响。
+
+## 菜单栏插件项（侧栏主菜单 / 底部调整区）
+
+`registerNav` 注册的是**路由入口**（参与导航高亮）；要注册**选项 / 动作**（开关、面板、
+外部跳转）用 `registerMenuBarItem` —— 它能带勾选态，并且会进 设置 → 外观 → 菜单栏 的
+「插件选项」调整区：
+
+```ts
+ctx.registerMenuBarItem({
+  id: "my-toggle",
+  label: "我的开关",
+  hint: "说明（作 tooltip）",
+  iconSvg: '<svg …>',
+  slot: "main",                 // main = 主菜单列表（缺省）；foot = 设置/缩回所在的底部调整区
+  checked: () => myPrefs.on,    // 不写 = 普通动作项
+  run: (el) => { myPrefs.on = !myPrefs.on; },
+});
+```
+
+- `main` 项排在内置项与插件路由项之后、「更多」之前；`foot` 项排在设置齿轮之前，侧栏缩回时
+  与设置/缩回一起竖排保留。
+- 有 `checked()` 的项画成可勾选项（`aria-pressed` + 亮起态）；宿主在每次点击后重读。
+- 用户可以在设置页逐项隐藏（`localStorage["quaver.sparkle.menubar.hidden.v1"]`，值是
+  `["<pluginId>:<itemId>", …]`）；停用插件 = 侧栏项与设置页那一行一起消失。
 
 ## storage / toast / log / player
 
@@ -313,6 +372,43 @@ ctx.registerTheme({ id: "t2", name: "T2", css: `…`, menus: { mode: "host" } })
 
 `tint`、`background` 与 `menus` 各自独立声明：只声明其中一个，另两个仍然按
 「不声明 = 主题接管」算。
+
+### 透明模式 —— `theme.transparent`
+
+想做玻璃 / 亚克力 / 磨砂主题，不必自己伪造整窗背景，也不必和用户选的壁纸抢版面：
+声明透明模式，宿主把**画布**让出来，你的半透明表面直接压在宿主的环境背景层上。
+
+```ts
+ctx.registerTheme({
+  id: "my-glass",
+  name: "玻璃",
+  transparent: { mode: "on" },
+  // 只声明 transparent 时背景仍归主题（缺省让位）；想借用用户的封面/壁纸，
+  // 再显式把背景交还宿主：
+  background: { mode: "host" },
+  css: `
+    --card: color-mix(in srgb, #ffffff 8%, transparent);
+    --sidebar-surface: color-mix(in srgb, #ffffff 6%, transparent);
+    --glass-line: #ffffff1f;
+    .frame, .sidebar, .player { backdrop-filter: blur(18px) saturate(1.3); }
+  `,
+});
+```
+
+宿主在 `mode: "on"` 时只做三件事：
+
+1. 在 `<html>` 写 `data-sparkle-transparent="on"`（供你写条件选择器）；
+2. 摘掉自己的实底：`html` / `body` / `.frame` / `.content` / `.content-body` / `.route`
+   的 `background` 置透明（基础规则由宿主运行时注入，不占首屏 CSS 预算）；
+3. 让环境背景层（`lib/ambient.ts`：当前曲封面或自定义壁纸）成为可见的下层。
+
+面板本身要多透明、模糊多强，全在你的 `css` 里写 —— 宿主不替你选玻璃语言。两条实践提醒：
+
+- **透明要配 `background: { mode: "host" }`**（或主题自己画背景）。只开透明又让宿主
+  「背景让位」时，下层是 Electron 窗口底色，看不到壁纸，通常不是你想要的。
+- **这是页面画布透明，不是 Electron 窗口透明**：窗口在创建时就是实底，透到桌面需要改
+  窗口创建参数，不在这个扩展点范围内。玻璃主题绝大多数想要的就是「透出宿主背景」。
+- 缺省 / `mode: "host"` = 不透明，宿主照旧用 `--bg` 铺满，设置页也不出现相关提示。
 
 已知取舍：花火面具是独立覆盖层，不参与「跟随系统」的明暗切换；也不会写进
 `Style.Style` 配置。未来并入外观选择器时会迁移。
