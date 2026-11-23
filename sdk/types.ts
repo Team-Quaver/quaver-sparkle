@@ -729,6 +729,9 @@ export interface SparkleQualityTier {
   locked?: boolean;
 }
 
+/** 默认正在播放页封面翻转方向：prev = 上一首（左到右）/ next = 下一首（右到左） */
+export type SparkleCoverFlipDirection = "prev" | "next";
+
 /** 播放器只读门面（插件不能直接改队列/状态） */
 export interface SparklePlayerFacade {
   readonly current: SparkleSongSnapshot | null;
@@ -741,6 +744,12 @@ export interface SparklePlayerFacade {
   spectrum?(): SparkleSpectrumFrame | null;
   /** 逐帧订阅频谱（不受 4Hz notify 限制）；返回退订函数。 */
   onSpectrum?(cb: (frame: SparkleSpectrumFrame) => void): () => void;
+  /**
+   * 回放一次**默认正在播放页**的封面中心翻转（带一点惯性；无曲目/收起/插件接管时无操作）。
+   * prev = 左到右，next = 右到左；切歌时宿主会自己调用，插件只在需要手动补一次动效时用。
+   * 旧宿主没有这个方法：调用前判空。
+   */
+  flipCover?(direction: SparkleCoverFlipDirection): void;
 }
 
 /**

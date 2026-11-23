@@ -229,6 +229,8 @@ ctx.registerMenuBarItem({
 - `ctx.log.info/warn/error`：控制台输出自动带 `[sparkle:<id>]` 前缀。
 - `ctx.player`：只读门面（current/time/paused/on）。`on` 约 4Hz + 状态变化触发，
   返回退订函数——请在 dispose 里退订。插件**不能**直接改队列或播放状态。
+  `flipCover?.("prev"|"next")` 可回放默认正在播放页的封面中心翻转（带一点惯性；上一首左到右 / 下一首右到左）；
+  收起态或插件整页接管时无操作，旧宿主可缺省。
 
 ## 自定义主题写法
 
