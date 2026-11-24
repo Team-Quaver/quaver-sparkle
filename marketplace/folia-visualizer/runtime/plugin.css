@@ -1,11 +1,17 @@
-/* Folia 歌词动效 —— plugin chrome (toolbar, picker, transport). Shadow DOM only. */
+/* Folia 歌词动效 —— 正在播放页的外壳（Shadow DOM only）
+   控制条已整条搬到走带控制（播放条右侧的按钮 + 浮窗，见 control.css）；
+   这里只剩：拖拽带、返回钮、键位提示，以及 Lattice 队列海报墙。 */
 .fvr {
     position: absolute;
     inset: 0;
     color: #fff;
     font-family: var(--font-ui, "Noto Sans CJK SC", system-ui, sans-serif);
     -webkit-font-smoothing: antialiased;
+    overflow: hidden;
 }
+
+/* 自动隐藏 / H 键隐藏播放条之后，指针也一起藏起来（Folia 的 bare 播放页） */
+.fvr.is-idle { cursor: none; }
 
 .fvr-drag {
     position: absolute;
@@ -17,229 +23,373 @@
     -webkit-app-region: drag;
 }
 
-/* 控制胶囊挂在**走带控制条**正上方，不再占用 CSD 顶带（--top-band-h 那条拖拽带要留给
-   窗口拖拽与宿主/其他插件的原生控件）。停靠态与悬浮态条的位置不同，各按宿主令牌抬升。 */
-.fvr-toolbar {
+/* —— 舞台：页面内唯一的控件是返回（悬停出现，静止淡出） —— */
+.fvr-chrome {
     position: absolute;
-    left: 50%;
-    bottom: calc(var(--control-bar-height, 64px) + var(--control-bar-dock-gap, 10px) + 12px);
-    transform: translateX(-50%);
+    left: 16px;
+    top: 14px;
     z-index: 60;
-    -webkit-app-region: no-drag;
-    pointer-events: auto;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 6px;
-    border-radius: 999px;
-    border: 1px solid #ffffff1f;
-    background: #10131cd9;
-    box-shadow: 0 8px 28px #0006, inset 0 1px 0 #ffffff14;
-    backdrop-filter: blur(18px) saturate(1.3);
-}
-
-/* 悬浮态条离底更远（inset*2 + lift），胶囊跟着条走，不写死像素。 */
-:host-context(body[data-control-bar="floating"]) .fvr-toolbar {
-    bottom: calc(var(--control-bar-inset, 10px) * 2 + var(--control-bar-lift, 14px) + var(--control-bar-height, 64px) + 12px);
-}
-
-.fvr-toolbar button,
-.fvr-transport button,
-.fvr-progress,
-.fvr-card,
-.fvr-bg,
-.fvr-x {
-    -webkit-app-region: no-drag;
-}
-
-.fvr-toolbar button {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    color: #fffb;
-    cursor: pointer;
-    transition: background .12s, color .12s;
-}
-
-.fvr-toolbar button:hover { background: #ffffff1f; color: #fff; }
-.fvr-toolbar .fvr-name {
-    width: auto;
-    padding: 0 12px;
-    display: flex;
-    gap: 7px;
-    font-size: 12.5px;
-    font-weight: 600;
-    letter-spacing: .2px;
-    white-space: nowrap;
-}
-.fvr-toolbar .fvr-name svg { color: var(--cvg-accent, #19c2d8); }
-.fvr-toolbar .fvr-next svg { transform: rotate(180deg); }
-
-.fvr-transport {
-    position: absolute;
-    left: 50%;
-    bottom: 18px;
-    transform: translateX(-50%);
-    z-index: 60;
-    -webkit-app-region: no-drag;
-    pointer-events: auto;
     display: flex;
     align-items: center;
     gap: 10px;
-    width: min(620px, calc(100% - 48px));
-    padding: 8px 14px;
-    border-radius: 16px;
-    border: 1px solid #ffffff1a;
-    background: #10131cd9;
-    box-shadow: 0 10px 32px #0007, inset 0 1px 0 #ffffff14;
-    backdrop-filter: blur(18px) saturate(1.3);
-}
-
-.fvr-transport button {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: #fffb;
-    cursor: pointer;
-}
-.fvr-transport button:hover { background: #ffffff1a; color: #fff; }
-.fvr-transport .fvr-play {
-    width: 38px;
-    height: 38px;
-    background: #fff;
-    color: #10131c;
-}
-.fvr-transport .fvr-play:hover { background: #f0f2f5; color: #10131c; }
-.fvr-time {
-    flex: none;
-    min-width: 42px;
-    font-size: 11px;
-    color: #fff9;
-    font-variant-numeric: tabular-nums;
-    text-align: center;
-}
-.fvr-progress {
-    flex: 1;
-    min-width: 60px;
-    height: 22px;
-    margin: 0;
-    accent-color: var(--cvg-accent, #19c2d8);
-    cursor: pointer;
-}
-.fvr-progress::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: #ffffff2b; }
-.fvr-progress::-webkit-slider-thumb { margin-top: -4px; width: 12px; height: 12px; border-radius: 50%; background: var(--cvg-accent, #19c2d8); }
-.fvr-progress::-moz-range-track { height: 4px; border-radius: 999px; background: #ffffff2b; }
-.fvr-progress::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--cvg-accent, #19c2d8); }
-
-.fvr-picker {
-    position: absolute;
-    inset: 0;
-    z-index: 80;
     -webkit-app-region: no-drag;
     pointer-events: auto;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-    background: #05070c99;
-    backdrop-filter: blur(10px);
+    transition: opacity .25s ease;
 }
-.fvr-panel {
-    width: min(860px, calc(100vw - 48px));
-    max-height: min(78vh, 760px);
-    overflow: auto;
-    padding: 18px 20px 20px;
-    border-radius: 18px;
-    border: 1px solid #ffffff1f;
-    background: #10131cf2;
-    box-shadow: 0 30px 80px #0009, inset 0 1px 0 #ffffff14;
-    scrollbar-width: thin;
-}
-.fvr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.fvr-head b { display: block; font-size: 16px; font-weight: 700; letter-spacing: .3px; }
-.fvr-head small { display: block; margin-top: 3px; font-size: 11.5px; color: #fff8; letter-spacing: .3px; }
-.fvr-x { width: 30px; height: 30px; border: 0; border-radius: 50%; background: #ffffff12; color: #fffb; cursor: pointer; display: grid; place-items: center; }
-.fvr-x:hover { background: #ffffff24; color: #fff; }
-.fvr-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 900px) { .fvr-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 640px) { .fvr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.fvr-card {
-    min-height: 64px; padding: 10px 12px; border-radius: 12px; border: 1px solid #ffffff12;
-    background: #ffffff08; color: #fffc; text-align: left; font: inherit; cursor: pointer;
-    display: flex; flex-direction: column; justify-content: center; gap: 3px;
-    transition: background .12s, border-color .12s, transform .12s;
-}
-.fvr-card:hover { background: #ffffff14; border-color: #ffffff2b; transform: translateY(-1px); }
-.fvr-card.sel { background: color-mix(in srgb, var(--cvg-accent, #19c2d8) 26%, #10131c); border-color: color-mix(in srgb, var(--cvg-accent, #19c2d8) 62%, #ffffff33); }
-.fvr-card b { font-size: 13px; font-weight: 650; letter-spacing: .4px; }
-.fvr-card small { font-size: 10.5px; color: #fff7; letter-spacing: .2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fvr-card.sel small { color: #fffb; }
-.fvr-bgs { margin-top: 16px; padding-top: 14px; border-top: 1px solid #ffffff12; display: flex; align-items: center; gap: 12px; }
-.fvr-bgs > span { flex: none; font-size: 12px; color: #fff8; letter-spacing: .4px; }
-.fvr-bg-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.fvr-bg { height: 26px; padding: 0 12px; border-radius: 999px; border: 1px solid #ffffff14; background: #ffffff0a; color: #fffb; font: inherit; font-size: 11.5px; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
-.fvr-bg:hover { background: #ffffff18; color: #fff; }
-.fvr-bg.sel { background: color-mix(in srgb, var(--cvg-accent, #19c2d8) 40%, #10131c); border-color: color-mix(in srgb, var(--cvg-accent, #19c2d8) 70%, #ffffff33); color: #fff; font-weight: 600; }
-
-.fvr-chrome { transition: opacity .25s ease; }
 .fvr-chrome-hidden { opacity: 0; pointer-events: none; }
 
-.fvr-foot {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 18px;
-    padding-top: 14px;
-    border-top: 1px solid #ffffff12;
-}
-.fvr-foot button {
-    height: 32px;
-    padding: 0 14px;
-    border-radius: 9px;
-    border: 1px solid #ffffff14;
-    background: #ffffff0a;
-    color: #fffb;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+.fvr-back,
+.fvr-lat-back,
+.fvr-lat-action {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 999px;
     cursor: pointer;
-    transition: background .12s, border-color .12s, color .12s;
-}
-.fvr-foot button:hover { background: #ffffff18; color: #fff; }
-.fvr-foot .fvr-foot-danger { color: #ff98a3; border-color: #ff5d6b33; background: #ff5d6b12; }
-.fvr-foot .fvr-foot-danger:hover { background: #ff5d6b22; color: #ffb3bc; }
-.fvr-foot .fvr-foot-quiet { color: #fffc; }
-
-.fvr-tip { display: inline-flex; }
-.fvr-tip-label {
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 8px);
-    transform: translateX(-50%);
-    z-index: 120;
-    max-width: 240px;
-    padding: 6px 9px;
-    border-radius: 8px;
+    color: #fffb;
     border: 1px solid #ffffff1f;
-    background: #14171ff2;
-    box-shadow: 0 8px 24px #0008;
-    color: #fffc;
-    font-size: 11.5px;
-    line-height: 1.4;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity .12s ease;
+    background: #10131cd9;
+    box-shadow: 0 8px 22px #0006, inset 0 1px 0 #ffffff14;
+    backdrop-filter: blur(14px) saturate(1.2);
+    transition: background .12s, color .12s;
+    -webkit-app-region: no-drag;
 }
-.fvr-tip:hover > .fvr-tip-label,
-.fvr-tip:focus-within > .fvr-tip-label { opacity: 1; }
+.fvr-back:hover,
+.fvr-lat-back:hover,
+.fvr-lat-action:hover { background: #1a1f2ce6; color: #fff; }
+
+.fvr-back { width: 34px; height: 34px; }
+
+.fvr-keyhint {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #ffffff14;
+    background: #10131c99;
+    color: #fff8;
+    font-size: 11px;
+    letter-spacing: .2px;
+    backdrop-filter: blur(10px);
+    pointer-events: none;
+}
+
+/* ===================== Lattice（队列海报墙） =====================
+   照 Folia 本体：12×8 世界格 + 相机；正在播放那张在墙内放大成 6×6 卡片，
+   同块邻居按 BLOCK_REFLOWS 让位。数字均为「世界单位」，随相机 scale 一起缩放。 */
+
+.fvr-lat {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: #070910;
+}
+
+.fvr-lat--vignette::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, #0000 78%, #00000085 100%);
+}
+
+/* —— 墙：相机变换下的世界 —— */
+.fvr-lat-field {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    overscroll-behavior: none;
+}
+.fvr-lat-field:active { cursor: grabbing; }
+
+.fvr-lat-world {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+/* 海报：绝对定位 + 让位时对四个几何量做补间（原版用 framer-motion 的 spring）。 */
+.fvr-lat-poster {
+    position: absolute;
+    display: block;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    background-color: #14161d;
+    background-position: center;
+    background-size: cover;
+    color: #fff;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    contain: layout paint;
+    -webkit-app-region: no-drag;
+    transition:
+        left .34s cubic-bezier(.22, .9, .24, 1),
+        top .34s cubic-bezier(.22, .9, .24, 1),
+        width .34s cubic-bezier(.22, .9, .24, 1),
+        height .34s cubic-bezier(.22, .9, .24, 1),
+        filter .3s ease,
+        box-shadow .3s ease;
+}
+.fvr-lat-poster:hover { filter: saturate(1.08) brightness(1.06); }
+
+/* 熄灯（Folia 的 lights-out）：展开时除正在播放那张，其余整墙压暗。 */
+.fvr-lat--expanded .fvr-lat-poster:not(.is-expanded) { filter: brightness(.3) saturate(.78); }
+.fvr-lat--expanded .fvr-lat-poster:not(.is-expanded):hover { filter: brightness(.5) saturate(.9); }
+
+.fvr-lat-shade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, #0000000d 34%, #0000003d 56%, #000000eb 100%);
+}
+
+/* 角标：与 .lattice-poster-badge 同位置/同口径（原版：14px 内缩、纯色底、不做 backdrop-filter） */
+.fvr-lat-badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    padding: 5px 8px;
+    background: #0000009e;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .12em;
+}
+.fvr-lat-poster.is-now .fvr-lat-badge {
+    color: var(--cvg-accent, #19c2d8);
+    background: #000000c7;
+}
+
+/* 标题：原版 .lattice-poster-copy 的量级与位置 */
+.fvr-lat-copy {
+    position: absolute;
+    right: 17px;
+    bottom: 17px;
+    left: 17px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    pointer-events: none;
+}
+.fvr-lat-copy strong {
+    overflow: hidden;
+    display: -webkit-box;
+    max-height: 2.9em;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    margin-block: -0.14em;
+    padding-block: 0.14em;
+    font-size: 22px;
+    line-height: .96;
+    letter-spacing: -.045em;
+    text-wrap: balance;
+    text-shadow: 0 1px 12px #0008;
+}
+.fvr-lat-copy small {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 650;
+    opacity: .78;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 1px 10px #0008;
+}
+
+/* —— 展开的正在播放卡片：与墙内 6×6 海报同一个元素 —— */
+.fvr-lat-poster.is-expanded {
+    z-index: 20;
+    box-shadow: 0 42px 110px #000000bd;
+    filter: none;
+    cursor: default;
+}
+/* 展开后压暗层换成原版那条「底部 + 左侧」重压：给标题、歌词与控制条留出可读底。 */
+.fvr-lat-poster.is-expanded .fvr-lat-shade {
+    background:
+        linear-gradient(0deg, #000000d9 0%, #0000009e 14%, #00000042 30%, #0000 46%),
+        linear-gradient(90deg, #000000e0 0%, #00000080 52%, #00000014 100%);
+}
+
+/* 展开后标题变成左上角的「歌词元信息」（原版 .lattice-lyric-metadata） */
+.fvr-lat-poster.is-expanded .fvr-lat-copy {
+    top: 74px;
+    right: 100px;
+    bottom: auto;
+    left: 17px;
+}
+.fvr-lat-poster.is-expanded .fvr-lat-copy strong {
+    max-height: none;
+    font-size: 22px;
+    line-height: 1.2;
+    -webkit-line-clamp: 1;
+    letter-spacing: 0;
+}
+.fvr-lat-poster.is-expanded .fvr-lat-copy small {
+    margin-top: 2px;
+    font-size: 13px;
+}
+
+/* 歌词区：原版 inset: 128px 24px 110px（上下各让出元信息与控制条） */
+.fvr-lat-lyrics {
+    position: absolute;
+    inset: 128px 24px 110px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    text-align: center;
+    pointer-events: none;
+}
+.fvr-lat-lyrics p {
+    margin: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 40px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: .2px;
+    color: #fff;
+    opacity: .92;
+    text-shadow: 0 2px 24px #000c;
+}
+.fvr-lat-dots { display: flex; align-items: center; gap: 9px; }
+.fvr-lat-dots i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ffffff30;
+    transition: background .2s ease, transform .2s ease;
+}
+.fvr-lat-dots i.on { background: #fff; transform: scale(1.15); }
+
+/* 底部控制条：原版 .lattice-chrome + .lattice-progress */
+.fvr-lat-chrome {
+    position: absolute;
+    left: 32px;
+    right: 24px;
+    bottom: 28px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    opacity: 0;
+    transition: opacity .25s ease;
+}
+.fvr-lat-chrome.is-revealed { opacity: 1; }
+
+.fvr-lat-transport {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+}
+
+.fvr-lat-play,
+.fvr-lat-open {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+.fvr-lat-open { opacity: .65; }
+.fvr-lat-play:hover,
+.fvr-lat-open:hover {
+    border-color: #ffffff26;
+    background: #ffffff24;
+    opacity: 1;
+}
+
+.fvr-lat-time {
+    flex: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    opacity: .6;
+}
+
+.fvr-lat-progress {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    touch-action: none;
+}
+.fvr-lat-progress::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #ffffff33;
+}
+.fvr-lat-progress i {
+    height: 2px;
+    background: #fff;
+    max-width: 100%;
+    pointer-events: none;
+}
+
+/* —— 返回（左上角）与右侧两颗浮动操作 —— */
+.fvr-lat-back {
+    position: absolute;
+    left: 16px;
+    top: 14px;
+    z-index: 8;
+    width: 34px;
+    height: 34px;
+}
+
+.fvr-lat-actions {
+    position: absolute;
+    right: 18px;
+    bottom: 26px;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.fvr-lat-action { width: 38px; height: 38px; }
+
+.fvr-lat-empty {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    align-items: center;
+    justify-content: center;
+    color: #fff9;
+    font-size: 12.5px;
+    pointer-events: none;
+}
+.fvr-lat-empty strong { font-size: 17px; color: #fff; letter-spacing: .16em; }
+
+@media (prefers-reduced-motion: reduce) {
+    .fvr-lat-poster,
+    .fvr-lat-chrome,
+    .fvr-chrome,
+    .fvr-lat-dots i { transition: none; }
+}
